@@ -1,0 +1,4929 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#04080e">
+<meta name="description" content="AURORA-7：单文件 WebGL 粒子圣诞树，七种光效、三层手势、现场合成的背景音乐与科技语音，不联网也能开。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AURORA-7">
+<meta property="og:type" content="website">
+<meta property="og:title" content="AURORA-7 · 粒子圣诞树">
+<meta property="og:description" content="七种光效的粒子圣诞树，手机可交互：点按涟漪、双击点亮、双指旋转、摇一摇。">
+<meta property="og:image" content="preview/share.png">
+<meta name="twitter:card" content="summary_large_image">
+<script>
+// 这个站点整站要带分享码才能访问，分享图地址也得把 query 带上，否则抓取会 403。
+// 静态值先给相对路径（本地打开也能用），有 query 就顺手补成带参数的绝对地址。
+(function () {
+  try {
+    if (!location.search) return;
+    var m = document.querySelector('meta[property="og:image"]');
+    if (!m) return;
+    var v = m.getAttribute('content');
+    if (/^https?:/i.test(v) || location.protocol === 'file:') return;
+    m.setAttribute('content', (function () {
+      var a = new URL(v, location.href);
+      a.search = location.search;   // 相对路径解析会丢掉 query，这里显式补回
+      return a.href;
+    })());
+    var u = document.createElement('meta');
+    u.setAttribute('property', 'og:url');
+    u.setAttribute('content', location.href);
+    document.head.appendChild(u);
+  } catch (_) {}
+})();
+</script>
+<title>AURORA-7 · 粒子圣诞树</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2304080e'/%3E%3Cpath d='M16 6 L22.5 15 H9.5 Z' fill='%236fe3b8'/%3E%3Cpath d='M16 12 L25 22.5 H7 Z' fill='%236fe3b8' opacity='.78'/%3E%3Crect x='14.6' y='22.5' width='2.8' height='4' fill='%23cfe9e2'/%3E%3Ccircle cx='16' cy='4.6' r='1.7' fill='%23ffffff'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --fg: #cfe9e2;
+    --dim: rgba(160, 200, 195, 0.42);
+    --line: rgba(120, 190, 180, 0.16);
+    --accent: #6fe3b8;
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html,body{ width:100%; height:100%; overflow:hidden; background:#04080e; }
+  body{
+    font-family: "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, "Courier New", monospace;
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+    touch-action: none;
+    user-select: none;
+  }
+  canvas{ position:fixed; inset:0; display:block; width:100%; height:100%; }
+
+  #ui{
+    position:fixed; inset:0; pointer-events:none;
+    display:flex; flex-direction:column; justify-content:space-between;
+    padding: clamp(16px, 2.6vmin, 34px);
+    padding-bottom: max(clamp(24px, 3.2vmin, 34px), calc(env(safe-area-inset-bottom, 0px) + 12px));
+    transition: opacity .45s ease;
+  }
+  #ui.hide{ opacity:0; }
+
+  header{ display:flex; flex-direction:column; gap:6px; }
+  .title{
+    font-size: clamp(15px, 1.9vmin, 22px);
+    letter-spacing: .42em; font-weight: 600;
+    color: var(--accent);
+    text-shadow: 0 0 18px rgba(111,227,184,.45);
+  }
+  .sub{
+    font-size: clamp(8px, .95vmin, 11px);
+    letter-spacing: .34em; color: var(--dim);
+  }
+
+  .mid{
+    position:absolute; left: clamp(16px, 2.6vmin, 34px);
+    top: 50%; transform: translateY(-50%);
+    display:flex; flex-direction:column; gap:10px;
+    max-width: 240px;
+  }
+  .mname{ display:flex; align-items:baseline; gap:10px; }
+  .mname b{
+    font-size: clamp(19px, 2.6vmin, 30px); font-weight: 500;
+    letter-spacing: .14em; color:#eafff8;
+    text-shadow: 0 0 24px rgba(140,255,220,.30);
+  }
+  .mname i{
+    font-style: normal; font-size: clamp(8px,.95vmin,10px);
+    letter-spacing:.26em; color: var(--dim);
+  }
+  .mdesc{
+    font-size: clamp(10px,1.15vmin,12px); line-height:1.9;
+    letter-spacing:.1em; color: rgba(190,225,218,.55);
+    border-left: 1px solid var(--line); padding-left: 12px;
+  }
+
+  footer{ display:flex; flex-direction:column; gap:14px; flex:none; }
+
+  nav{
+    display:flex; gap:8px; flex-wrap:wrap;
+    pointer-events:auto;
+  }
+  .tab{
+    position:relative;
+    display:flex; align-items:center; gap:7px;
+    padding: 7px 12px 7px 10px;
+    border:1px solid var(--line);
+    border-radius:2px;
+    background: rgba(8,20,20,.32);
+    backdrop-filter: blur(6px);
+    cursor:pointer;
+    font-family:inherit;
+    font-size: clamp(9px, 1vmin, 11px);
+    letter-spacing:.14em;
+    color: rgba(180,215,210,.60);
+    transition: all .28s cubic-bezier(.2,.8,.3,1);
+    white-space:nowrap;
+  }
+  .tab .k{
+    font-size:9px; opacity:.45; letter-spacing:0;
+  }
+  .tab:hover{
+    color:#dffaf2; border-color: rgba(120,220,200,.42);
+    background: rgba(20,50,46,.46);
+  }
+  .tab.on{
+    color:#08120f;
+    background: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 22px rgba(111,227,184,.42), inset 0 0 12px rgba(255,255,255,.25);
+  }
+  .tab.on .k{ opacity:.6; }
+
+  .hint{
+    font-size: clamp(8px,.9vmin,10px);
+    letter-spacing:.2em; color: rgba(150,190,185,.30);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .hint b{ color: rgba(150,190,185,.55); font-weight:400; }
+  #hintRot{ display:inline-block; transition:opacity .22s ease; }
+
+  /* 音效开关：右上角，还没出声的时候脉冲提示"点一下就有声音" */
+  .snd{
+    position:absolute;
+    right: clamp(16px, 2.6vmin, 34px);
+    top: clamp(15px, 2.5vmin, 32px);
+    display:inline-flex; align-items:center; gap:6px;
+    padding:6px 10px 6px 9px;
+    border:1px solid var(--line); border-radius:2px;
+    background:rgba(8,20,20,.32);
+    backdrop-filter: blur(6px);
+    font:inherit; font-size:clamp(8px,.95vmin,10px);
+    letter-spacing:.16em; color:rgba(180,215,210,.55);
+    cursor:pointer; pointer-events:auto;
+    transition: color .25s, border-color .25s, background .25s;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .snd .ic{ font-size:1.15em; line-height:1; color:rgba(111,227,184,.65); }
+  .snd i{ font-style:normal; }
+  .snd.on{ color:#dffaf2; border-color:rgba(120,220,200,.42); background:rgba(20,50,46,.42); }
+  .snd.on .ic{ color:#8dffd6; }
+  .snd.wait{ animation: sndWait 2.4s ease-in-out infinite; }
+  @keyframes sndWait{
+    50%{ border-color:rgba(111,227,184,.62); box-shadow:0 0 18px rgba(111,227,184,.30); color:#dffaf2; }
+  }
+  .snd.wait .ic{ animation: sndBeat 1.2s ease-in-out infinite; }
+  @keyframes sndBeat{ 50%{ opacity:.45; } }
+
+  #err{
+    position:fixed; inset:0; display:none; place-items:center;
+    background:#04080e; color:#ff8f8f; font-size:13px; padding:32px;
+    text-align:center; line-height:2; z-index:99;
+  }
+  .only-mob{ display:none; }
+  body.mobile .only-desk{ display:none; }
+  body.mobile .only-mob{ display:inline; }
+
+  @media (hover: none) and (pointer: coarse){
+    .only-desk{ display:none; }
+    .only-mob{ display:inline; }
+  }
+
+  @media (max-width: 720px){
+    .mid{ display:none; }
+    nav{ gap:5px; }
+    .tab{ padding:6px 8px; letter-spacing:.06em; }
+    .tab .k{ display:none; }
+    footer{ gap:8px; }
+    .hint{ letter-spacing:.10em; }
+  }
+
+  /* ============================================================
+     入场序列：AURORA-7 冷启动
+     遮罩在 z=60（盖住 canvas 与 UI，低于报错层）
+     时间轴由 JS 驱动（app.bootK），这里只负责各元素的独立动效
+     ============================================================ */
+  /* 入场期间 UI 必须完全让位：这里用 !important + 关掉过渡，
+     否则会跟 #ui 自带的 opacity 过渡打架（遮罩刚变透明时 UI 会半路冒出来） */
+  #ui.boot-hide{ opacity:0 !important; transition:none !important; }
+
+  #boot{
+    position:fixed; inset:0; z-index:60;
+    overflow:hidden;
+    transition: opacity .58s cubic-bezier(.4,0,.15,1);
+    will-change: opacity;
+  }
+  #boot.gone{ opacity:0; pointer-events:none; }
+
+  /* 暗场单独一层：它要早早退开，树才能在"扫描界面"底下长出来。
+     否则遮罩一路不透明，树长完了用户才第一次看见它 */
+  .bt-veil{
+    position:absolute; inset:0;
+    background:#04080e;
+    transition: opacity .95s cubic-bezier(.4,0,.2,1);
+  }
+  .bt-veil.out{ opacity:0; }
+
+  /* 网格：从中心炸开，中段停留，末尾随遮罩一起消失 */
+  .bt-grid{
+    position:absolute; inset:-12%;
+    background-image:
+      linear-gradient(rgba(111,227,184,.13) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(111,227,184,.13) 1px, transparent 1px);
+    background-size: 34px 34px;
+    -webkit-mask-image: radial-gradient(circle at 50% 46%, #000 0 26%, transparent 68%);
+            mask-image: radial-gradient(circle at 50% 46%, #000 0 26%, transparent 68%);
+    opacity:0;
+    animation: btGrid 2.1s cubic-bezier(.16,.9,.2,1) forwards;
+  }
+  @keyframes btGrid{
+    0%   { opacity:0; transform:scale(1.28); }
+    22%  { opacity:1; }
+    58%  { transform:scale(1); }
+    100% { opacity:0; transform:scale(1.04); }
+  }
+
+  /* 横向扫描光带：像在逐行扫过屏幕做自检 */
+  .bt-scan{
+    position:absolute; left:0; right:0; top:0; height:2px;
+    background:linear-gradient(90deg, transparent, rgba(111,227,184,.9), transparent);
+    box-shadow:0 0 20px 3px rgba(111,227,184,.5);
+    opacity:0;
+    animation: btScan 1.5s cubic-bezier(.45,0,.55,1) .1s 2;
+  }
+  @keyframes btScan{
+    0%   { opacity:0; transform: translateY(-8vh); }
+    10%  { opacity:1; }
+    86%  { opacity:1; }
+    100% { opacity:0; transform: translateY(108vh); }
+  }
+
+  /* 中心准星 */
+  .bt-core{
+    position:absolute; left:50%; top:46%;
+    width: min(58vmin, 300px); height: min(58vmin, 300px);
+    transform: translate(-50%,-50%) scale(.32);
+    opacity:0;
+    animation: btCore .5s cubic-bezier(.16,.9,.2,1) .1s forwards;
+  }
+  @keyframes btCore{ to{ opacity:1; transform:translate(-50%,-50%) scale(1); } }
+
+  .bt-ring{ position:absolute; inset:0; border-radius:50%; }
+  .bt-ring.r1{
+    border:1px solid rgba(111,227,184,.22);
+    box-shadow: inset 0 0 46px rgba(111,227,184,.10), 0 0 26px rgba(111,227,184,.08);
+  }
+  /* 亮弧用 conic-gradient 挖出一段，再靠 mask 只留圆环那一圈 */
+  .bt-ring.r2, .bt-ring.r3{ animation-timing-function: linear; animation-iteration-count: infinite; }
+  .bt-ring.r2{
+    inset:8%;
+    background: conic-gradient(from 0deg, rgba(111,227,184,.95) 0deg, rgba(111,227,184,.95) 60deg, transparent 60deg);
+    -webkit-mask: radial-gradient(circle, transparent 0 48.0%, #000 48.3% 50.5%, transparent 50.8%);
+            mask: radial-gradient(circle, transparent 0 48.0%, #000 48.3% 50.5%, transparent 50.8%);
+    animation-name: btSpin; animation-duration: 1.05s;
+  }
+  .bt-ring.r3{
+    inset:21%;
+    background: conic-gradient(from 180deg, rgba(160,240,255,.62) 0deg, rgba(160,240,255,.62) 32deg, transparent 32deg);
+    -webkit-mask: radial-gradient(circle, transparent 0 47.4%, #000 47.7% 50.3%, transparent 50.6%);
+            mask: radial-gradient(circle, transparent 0 47.4%, #000 47.7% 50.3%, transparent 50.6%);
+    animation-name: btSpinRev; animation-duration: 1.75s;
+  }
+  @keyframes btSpin   { to{ transform: rotate(360deg); } }
+  @keyframes btSpinRev{ to{ transform: rotate(-360deg); } }
+
+  /* 从准星向外扩散的信号环：给静态的 HUD 一点主动的动势 */
+  .bt-pulse{
+    position:absolute; left:50%; top:46%;
+    width: min(58vmin, 300px); height: min(58vmin, 300px);
+    transform:translate(-50%,-50%);
+    border:1px solid rgba(111,227,184,.55);
+    border-radius:50%; opacity:0; pointer-events:none;
+    animation: btPulseRing 1.15s cubic-bezier(.2,.7,.3,1) .3s 2;
+  }
+  .bt-pulse.p2{ animation-delay:.62s; border-color:rgba(160,240,255,.42); }
+  @keyframes btPulseRing{
+    0%  { opacity:.72; transform:translate(-50%,-50%) scale(.52); }
+    100%{ opacity:0;   transform:translate(-50%,-50%) scale(1.6); }
+  }
+
+  .bt-dot{
+    position:absolute; left:50%; top:50%; width:4px; height:4px; margin:-2px 0 0 -2px;
+    border-radius:50%; background:#e8fff8;
+    box-shadow: 0 0 14px 3px rgba(111,227,184,.95), 0 0 46px 12px rgba(111,227,184,.34);
+    animation: btPulse .85s ease-in-out infinite;
+  }
+  @keyframes btPulse{ 50%{ transform:scale(.5); opacity:.45; } }
+
+  .bt-cross::before, .bt-cross::after{
+    content:''; position:absolute; left:50%; top:50%;
+    background: rgba(111,227,184,.34);
+  }
+  .bt-cross::before{ width:1px; height:13%; transform:translate(-50%,-50%); }
+  .bt-cross::after { width:13%; height:1px; transform:translate(-50%,-50%); }
+
+  .bt-hud{
+    position:absolute;
+    font-size: clamp(9px, 1.05vmin, 11px);
+    letter-spacing:.2em; line-height:1.95;
+    color: rgba(150,200,195,.50);
+    /* 字要压在发光的树上也读得清，所以带一圈底色描边 */
+    text-shadow: 0 0 6px rgba(4,8,14,.95), 0 0 14px rgba(4,8,14,.85);
+    opacity:0; animation: btFade .45s ease .16s forwards;
+    white-space:nowrap;
+  }
+  @keyframes btFade{ to{ opacity:1; } }
+  .bt-hud.tl{ left: max(16px,4vmin); top: max(16px,4vmin); }
+  .bt-hud.tr{ right:max(16px,4vmin); top: max(16px,4vmin); text-align:right; }
+  .bt-hud.brand{ color:rgba(111,227,184,.85); letter-spacing:.34em; }
+
+  /* 左下角终端日志 */
+  .bt-log{
+    position:absolute; left:50%; bottom:calc(26% + env(safe-area-inset-bottom, 0px));
+    transform:translateX(-50%);
+    width: min(64vmin, 350px);
+    font-size: clamp(9px, 1.05vmin, 11px);
+    letter-spacing:.12em; line-height:2.05;
+    text-shadow: 0 0 6px rgba(4,8,14,.95), 0 0 14px rgba(4,8,14,.85);
+  }
+  .bt-log .ln{ display:flex; gap:8px; color:rgba(180,225,220,.80); }
+  .bt-log .ln .tx{ flex:1; overflow:hidden; white-space:nowrap; }
+  .bt-log .ln .st{ color:#6fe3b8; }
+  .bt-log .ln:last-child .st{ color:#eafff8; text-shadow:0 0 12px rgba(111,227,184,.9); }
+
+  /* 进度条 + 百分比 */
+  .bt-bar{
+    position:absolute; left:50%; bottom:calc(20% + env(safe-area-inset-bottom, 0px));
+    transform:translateX(-50%);
+    width: min(64vmin, 350px); height:1px;
+    background: rgba(111,227,184,.15);
+  }
+  .bt-bar i{
+    display:block; width:100%; height:100%;
+    background: linear-gradient(90deg, rgba(111,227,184,.25), #6fe3b8 88%);
+    box-shadow: 0 0 12px rgba(111,227,184,.85);
+    transform: scaleX(0); transform-origin: 0 50%;
+  }
+  .bt-pct{
+    position:absolute; left:50%; bottom:calc(15.5% + env(safe-area-inset-bottom, 0px));
+    transform:translateX(-50%);
+    font-size: clamp(9px, 1.05vmin, 11px);
+    letter-spacing:.14em; color:rgba(150,200,195,.55);
+    text-shadow: 0 0 6px rgba(4,8,14,.95), 0 0 14px rgba(4,8,14,.85);
+  }
+
+  /* 结束爆发：两层同心光环 + 一下白闪 */
+  .bt-burst{
+    position:absolute; left:50%; top:46%;
+    width:12px; height:12px; margin:-6px 0 0 -6px;
+    border-radius:50%; border:2px solid rgba(215,255,245,.95);
+    opacity:0; pointer-events:none;
+  }
+  .bt-burst.on{ animation: btBurst .78s cubic-bezier(.1,.75,.2,1) forwards; }
+  .bt-burst.b2{ border-color: rgba(111,227,184,.75); }
+  .bt-burst.b2.on{ animation-delay:.09s; animation-duration:.9s; }
+  @keyframes btBurst{
+    0%   { opacity:.95; transform:translate(-50%,-50%) scale(1);  border-width:2px; }
+    72%  { opacity:.45; }
+    100% { opacity:0;   transform:translate(-50%,-50%) scale(58); border-width:.4px; }
+  }
+
+  .bt-flash{
+    position:absolute; inset:0; background:#dffff6; opacity:0; pointer-events:none;
+  }
+  .bt-flash.on{ animation: btFlash .5s ease-out forwards; }
+  @keyframes btFlash{
+    0%{ opacity:0; } 18%{ opacity:.5; } 100%{ opacity:0; }
+  }
+
+  /* 系统设置里关掉动效的用户：直接给个干脆的过渡 */
+  @media (prefers-reduced-motion: reduce){
+    .bt-grid, .bt-scan, .bt-ring.r2, .bt-ring.r3, .bt-dot{ animation:none; }
+    .bt-grid{ opacity:.5; }
+  }
+
+  /* ============================================================
+     授权门（手机端进场前的互动确认）
+     形态参考：深色 HUD + 四角细线框 + 宽字距中英双标题
+     + 括号按钮 + 左下步进 + 底部状态行
+     三种确认方式：点按 / 长按 / 滑动
+     ============================================================ */
+  #gate{
+    position:fixed; inset:0; z-index:61;
+    background:#04080e;
+    display:none;
+    opacity:1;
+    transition:opacity .46s cubic-bezier(.4,0,.2,1);
+  }
+  #gate.on{ display:block; }
+  #gate.gone{ opacity:0; pointer-events:none; }
+
+  /* 极淡的暗网格，托住文字又不抢戏 */
+  .gt-grid{
+    position:absolute; inset:-6%;
+    background-image:
+      linear-gradient(rgba(111,227,184,.055) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(111,227,184,.055) 1px, transparent 1px);
+    background-size: 44px 44px;
+    -webkit-mask-image: radial-gradient(ellipse at 50% 46%, #000 0 42%, transparent 78%);
+            mask-image: radial-gradient(ellipse at 50% 46%, #000 0 42%, transparent 78%);
+    animation: gtDrift 26s linear infinite;
+  }
+  @keyframes gtDrift{ to{ background-position: 44px 44px; } }
+
+  /* 扫描线：整屏缓扫，强调"系统在跑" */
+  .gt-sweep{
+    position:absolute; left:0; right:0; top:0; height:1px;
+    background:linear-gradient(90deg, transparent, rgba(111,227,184,.52), transparent);
+    opacity:.5; animation: gtSweep 5.6s linear infinite;
+  }
+  @keyframes gtSweep{
+    0%{ transform:translateY(6vh); opacity:0; }
+    12%{ opacity:.55; }
+    88%{ opacity:.4; }
+    100%{ transform:translateY(96vh); opacity:0; }
+  }
+
+  /* 四角括号框 */
+  .gt-frame{ position:absolute; inset: max(14px, 3.4vmin); pointer-events:none; }
+  .gt-frame .c{
+    position:absolute; width:15px; height:15px;
+    border:0 solid rgba(111,227,184,.40);
+  }
+  .gt-frame .c.tl{ left:0; top:0; border-left-width:1px; border-top-width:1px; }
+  .gt-frame .c.tr{ right:0; top:0; border-right-width:1px; border-top-width:1px; }
+  .gt-frame .c.bl{ left:0; bottom:0; border-left-width:1px; border-bottom-width:1px; }
+  .gt-frame .c.br{ right:0; bottom:0; border-right-width:1px; border-bottom-width:1px; }
+  /* 竖向细线：把画面切成三栏，和参考里的版式呼应 */
+  .gt-frame .vl, .gt-frame .vr{
+    position:absolute; top:9%; bottom:9%; width:1px;
+    background:linear-gradient(180deg, transparent, rgba(111,227,184,.13) 30%, rgba(111,227,184,.13) 70%, transparent);
+  }
+  .gt-frame .vl{ left:6.4%; }
+  .gt-frame .vr{ right:6.4%; }
+
+  .gt-head, .gt-meta{
+    position:absolute; top: max(20px, 4.6vmin);
+    font-size: clamp(8px, 2vmin, 10px);
+    letter-spacing:.22em; line-height:2.0;
+    color:rgba(150,200,195,.44);
+  }
+  .gt-head{ left: max(20px, 4.6vmin); }
+  .gt-meta{ right:max(20px, 4.6vmin); text-align:right; }
+  .gt-head .b{
+    font-size:clamp(10px,2.5vmin,12px); letter-spacing:.34em; font-weight:600;
+    color:rgba(111,227,184,.90); margin-bottom:2px;
+    text-shadow:0 0 16px rgba(111,227,184,.45);
+  }
+  .gt-meta .skip{
+    display:block; margin-top:9px; margin-left:auto; padding:3px 0;
+    width:max-content;
+    color:rgba(150,200,195,.55); letter-spacing:.28em;
+    border-bottom:1px solid rgba(111,227,184,.22);
+    pointer-events:auto; cursor:pointer;
+  }
+  .gt-meta .skip:active{ color:#dffaf2; }
+
+  /* 中心区块 */
+  .gt-body{
+    position:absolute; left:50%; top:48%; transform:translate(-50%,-50%);
+    width:min(88vw, 460px); text-align:center;
+    transition: opacity .22s ease, transform .22s ease;
+  }
+  .gt-body.out{ opacity:0; transform:translate(-50%,-50%) translateY(7px); }
+
+  .gt-cn{
+    font-size: clamp(20px, 6.2vmin, 31px);
+    letter-spacing:.28em; text-indent:.28em; font-weight:500;
+    color:#eafff8; text-shadow:0 0 28px rgba(111,227,184,.34);
+    white-space:nowrap;
+  }
+  .gt-cn::after{
+    content:''; display:inline-block; width:.34em; height:.92em;
+    margin-left:.16em; vertical-align:-.06em;
+    background:#6fe3b8; opacity:.85; animation: gtCaret 1.1s steps(1) infinite;
+  }
+  @keyframes gtCaret{ 50%{ opacity:0; } }
+
+  .gt-en{
+    margin-top:11px;
+    font-size: clamp(8px, 2.1vmin, 10px);
+    letter-spacing:.40em; text-indent:.40em;
+    color:rgba(150,200,195,.55);
+  }
+  .gt-rule{
+    margin:15px auto 0; width:min(74%, 320px); height:1px;
+    background:linear-gradient(90deg, transparent, rgba(111,227,184,.38), transparent);
+  }
+
+  .gt-act{
+    margin-top: clamp(24px, 5.4vmin, 42px);
+    display:flex; flex-direction:column; align-items:center; gap:11px;
+  }
+
+  /* 括号按钮（点按 / 长按共用） */
+  .gt-btn{
+    position:relative; display:inline-flex; align-items:center; justify-content:center;
+    gap:8px; padding:13px 18px;
+    min-width: min(78vw, 300px);
+    background:rgba(111,227,184,.045);
+    border:1px solid rgba(111,227,184,.42);
+    color:#dffaf2; font:inherit;
+    font-size: clamp(11px, 2.9vmin, 13px); letter-spacing:.18em;
+    cursor:pointer; overflow:hidden;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:none;
+    transition: background .2s, box-shadow .2s, border-color .2s, transform .12s;
+    animation: gtBreath 3.2s ease-in-out infinite;
+  }
+  @keyframes gtBreath{
+    50%{ box-shadow:0 0 26px rgba(111,227,184,.20), inset 0 0 16px rgba(111,227,184,.05); }
+  }
+  .gt-btn .bk{ color:rgba(111,227,184,.9); font-size:.92em; }
+  .gt-btn em{
+    font-style:normal; font-size:.74em; letter-spacing:.24em;
+    color:rgba(150,200,195,.52); margin-left:2px;
+  }
+  .gt-btn:active, .gt-btn.held{
+    background:rgba(111,227,184,.16);
+    border-color:rgba(111,227,184,.85);
+    box-shadow:0 0 34px rgba(111,227,184,.42), inset 0 0 22px rgba(111,227,184,.14);
+  }
+  /* 长按进度：按钮底部一条走满的线 */
+  .gt-btn .pb{
+    position:absolute; left:0; bottom:0; height:2px; width:0%;
+    background:linear-gradient(90deg, rgba(111,227,184,.45), #b6ffe6);
+    box-shadow:0 0 12px rgba(111,227,184,.95);
+  }
+  .gt-btn.bad{ animation: gtNope .34s ease; }
+  @keyframes gtNope{
+    0%,100%{ transform:translateX(0); }
+    25%{ transform:translateX(-5px); } 75%{ transform:translateX(5px); }
+  }
+
+  .gt-tip{
+    font-size: clamp(8px, 2vmin, 10px);
+    letter-spacing:.2em; color:rgba(150,195,190,.42);
+    white-space:nowrap;
+  }
+
+  /* 三步进度：短横线，走过的一格变亮 */
+  .gt-dots{ display:flex; gap:9px; justify-content:center; margin-top:20px; }
+  .gt-dots i{
+    display:block; width:18px; height:2px;
+    background:rgba(111,227,184,.16);
+    transition: background .3s, box-shadow .3s;
+  }
+  .gt-dots i.done{ background:rgba(111,227,184,.55); }
+  .gt-dots i.on{
+    background:#8dffd6;
+    box-shadow:0 0 12px rgba(111,227,184,.9);
+    animation: gtDotPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes gtDotPulse{ 50%{ opacity:.45; } }
+
+  /* 滑动确认 */
+  .gt-slide{
+    position:relative; width:min(78vw, 300px); height:48px;
+    border:1px solid rgba(111,227,184,.32);
+    background:rgba(111,227,184,.035);
+    overflow:hidden; touch-action:none; cursor:pointer;
+  }
+  .gt-slide .fl{
+    position:absolute; left:0; top:0; bottom:0; width:48px;
+    background:linear-gradient(90deg, rgba(111,227,184,.30), rgba(111,227,184,.06));
+  }
+  .gt-slide .kb{
+    position:absolute; left:4px; top:4px; width:40px; height:38px;
+    display:grid; place-items:center;
+    border:1px solid rgba(111,227,184,.62);
+    background:rgba(111,227,184,.16);
+    color:#eafff8; font-size:14px;
+    box-shadow:0 0 18px rgba(111,227,184,.35);
+  }
+  .gt-slide .lb{
+    position:absolute; inset:0; display:grid; place-items:center;
+    font-size: clamp(10px,2.6vmin,11px); letter-spacing:.26em;
+    color:rgba(180,222,216,.50);
+    text-indent:.26em;
+  }
+
+  /* 左下步进 + 底部状态 */
+  .gt-step{
+    position:absolute; left:max(20px,4.6vmin);
+    bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+    font-size: clamp(8px,2vmin,10px); letter-spacing:.22em;
+    color:rgba(150,200,195,.48);
+  }
+  .gt-step b{ color:#6fe3b8; font-weight:500; }
+  .gt-step i{ font-style:normal; color:rgba(150,200,195,.34); margin-left:4px; }
+
+  .gt-stat{
+    position:absolute; left:50%; transform:translateX(-50%);
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    text-align:center; width:100%;
+    font-size: clamp(8px,2vmin,10px); letter-spacing:.2em;
+    color:rgba(190,225,218,.62);
+  }
+  .gt-stat i{
+    display:block; margin-top:5px; font-style:normal;
+    font-size:.86em; letter-spacing:.30em; color:rgba(150,200,195,.34);
+  }
+
+  /* 确认成功：一道横向光带扫过 + 标题变亮 */
+  .gt-ok{
+    position:absolute; left:0; right:0; top:48%; height:1px;
+    background:linear-gradient(90deg, transparent, #d8fff2, transparent);
+    opacity:0; box-shadow:0 0 22px 2px rgba(111,227,184,.75);
+  }
+  .gt-ok.on{ animation: gtOkSweep .62s cubic-bezier(.3,.8,.2,1) forwards; }
+  @keyframes gtOkSweep{
+    0%{ opacity:0; transform:scaleX(.1); }
+    22%{ opacity:.95; transform:scaleX(1); }
+    100%{ opacity:0; transform:scaleX(1) scaleY(2.4); }
+  }
+
+  /* 手机竖屏稍微收紧一点 */
+  @media (max-height: 620px){
+    .gt-body{ top:44%; }
+    .gt-cn{ font-size:clamp(17px,5.6vmin,24px); }
+    .gt-act{ margin-top:18px; }
+    .gt-grid{ background-size:38px 38px; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .gt-grid, .gt-sweep, .gt-cn::after, .gt-btn{ animation:none; }
+  }
+
+  /* ============================================================
+     手势反馈提示条（手机端）
+     ============================================================ */
+  .toast{
+    position:absolute; left:50%; bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+    transform: translate(-50%, 10px);
+    padding:8px 14px 8px 13px;
+    border:1px solid rgba(111,227,184,.46);
+    border-left-width:2px;
+    background:rgba(4,12,16,.88);
+    box-shadow:0 8px 30px rgba(0,0,0,.55), 0 0 22px rgba(111,227,184,.12);
+    backdrop-filter: blur(8px);
+    font-size: clamp(9px,2.2vmin,11px); letter-spacing:.2em;
+    color:#dffaf2; white-space:nowrap;
+    opacity:0; pointer-events:none;
+    transition: opacity .22s ease, transform .28s cubic-bezier(.2,.8,.3,1);
+  }
+  .toast .en{
+    font-size:.8em; letter-spacing:.26em;
+    color:rgba(150,200,195,.52); margin-left:8px;
+  }
+  .toast.on{ opacity:1; transform:translate(-50%, 0); }
+
+  /* ============================================================
+     祝福语 / 愿望星 / 星芒 / 流星 / 引导 / 署名框
+     ============================================================ */
+  .bless{ display:flex; flex-direction:column; gap:2px; margin-top:2px; }
+  .bl-cn{
+    font-size: clamp(17px, 2.45vmin, 27px);
+    letter-spacing:.34em; font-weight:600; line-height:1.25;
+  }
+  .bl-cn span{
+    background: linear-gradient(100deg, #8fffd8 0%, #ffffff 26%, #b7f0ff 48%, #ffffff 66%, #8fffd8 100%);
+    background-size: 260% 100%;
+    -webkit-background-clip:text; background-clip:text;
+    -webkit-text-fill-color:transparent; color:transparent;
+    animation: blShine 7.5s linear infinite;
+    filter: drop-shadow(0 0 16px rgba(110,255,215,.38));
+  }
+  @keyframes blShine{ from{ background-position:130% 0; } to{ background-position:-140% 0; } }
+  .bl-en{
+    font-size: clamp(7.5px, .85vmin, 10px);
+    letter-spacing:.44em; color: rgba(160,210,200,.50);
+  }
+  .bl-to{
+    margin-top:6px; align-self:flex-start;
+    display:inline-flex; align-items:center; gap:7px;
+    padding:8px 0 7px; border:0; background:none;
+    font:inherit; font-size: clamp(8.5px, .95vmin, 10.5px);
+    letter-spacing:.2em; color: rgba(198,236,226,.78);
+    cursor:pointer; pointer-events:auto; touch-action:manipulation;
+    border-bottom:1px dashed rgba(111,227,184,.38);
+    -webkit-tap-highlight-color:transparent;
+  }
+  .bl-to .bl-to-l{ color: rgba(111,227,184,.72); letter-spacing:.1em; }
+  .bl-to:hover{ color:#eafff8; border-bottom-color: rgba(111,227,184,.55); }
+  .bless.gold .bl-cn span{
+    background-image: linear-gradient(100deg, #ffdf9a 0%, #fffdf4 26%, #ffcf6e 48%, #fffdf4 66%, #ffdf9a 100%);
+    filter: drop-shadow(0 0 22px rgba(255,205,110,.55));
+  }
+  .bless.gold .bl-en{ color: rgba(255,226,160,.62); }
+
+  .wish{
+    display:flex; align-items:baseline; gap:5px; margin-top:7px;
+    font-size: clamp(8px, .92vmin, 10px); letter-spacing:.18em;
+    color: rgba(190,225,215,.62);
+  }
+  .wish[hidden]{ display:none; }
+  .wish-i{ color:#ffd977; font-size:1.15em; text-shadow:0 0 12px rgba(255,200,90,.85); }
+  .wish b{ color:#ffe6a8; font-weight:600; }
+  .wish em{ font-style:normal; color: rgba(170,205,198,.42); letter-spacing:.12em; }
+
+  /* 树顶星芒：位置每帧由 JS 投影过去 */
+  #starGlow{
+    position:fixed; left:0; top:0; width:0; height:0; z-index:4;
+    pointer-events:none; opacity:0; transition:opacity .6s ease;
+    will-change: transform, opacity;
+  }
+  #starGlow .sc{
+    position:absolute; left:50%; top:50%; width:150px; height:150px;
+    margin:-75px 0 0 -75px; border-radius:50%;
+    background: radial-gradient(circle, rgba(235,255,248,.92) 0%, rgba(150,255,228,.40) 20%,
+                rgba(110,230,200,.12) 46%, rgba(110,230,200,0) 72%);
+  }
+  #starGlow .sh{
+    position:absolute; left:50%; top:50%; width:330px; height:2px;
+    margin:-1px 0 0 -165px;
+    background: linear-gradient(90deg, transparent, rgba(200,255,242,.10) 12%,
+                rgba(220,255,248,.85) 50%, rgba(200,255,242,.10) 88%, transparent);
+    filter: blur(.6px);
+  }
+  #starGlow .sv{
+    position:absolute; left:50%; top:50%; width:2px; height:210px;
+    margin:-105px 0 0 -1px;
+    background: linear-gradient(180deg, transparent, rgba(200,255,242,.12) 14%,
+                rgba(220,255,248,.68) 50%, rgba(200,255,242,.12) 86%, transparent);
+    filter: blur(.6px);
+  }
+
+  /* 极光爆发：一层屏幕空间的极光雾，只在一瞬间出现 */
+  #auroraBurst{
+    position:fixed; inset:0; z-index:3; pointer-events:none; opacity:0;
+    background:
+      radial-gradient(58% 42% at 22% 28%, rgba(90,255,205,.34), rgba(90,255,205,0) 70%),
+      radial-gradient(52% 38% at 78% 58%, rgba(120,180,255,.26), rgba(120,180,255,0) 72%),
+      radial-gradient(72% 46% at 50% 102%, rgba(160,255,220,.24), rgba(160,255,220,0) 70%);
+    mix-blend-mode: screen;
+  }
+  #auroraBurst.on{ animation: auBreathe 4.2s ease-in-out forwards; }
+  @keyframes auBreathe{
+    0%  { opacity:0; transform:scale(1.08); }
+    16% { opacity:1; }
+    62% { opacity:.62; }
+    100%{ opacity:0; transform:scale(1.0); }
+  }
+
+  /* 流星：屏幕空间 DOM，点中即收集。
+     容器是一个"点"（流星头），尾迹是它内部旋转出去的一条线 ——
+     这样位移在屏幕坐标里是直的，尾迹方向也对得上 */
+  #meteors{ position:fixed; inset:0; z-index:5; pointer-events:none; overflow:hidden; }
+  .meteor{
+    position:absolute; width:56px; height:32px; margin:-16px 0 0 -28px;
+    pointer-events:auto; cursor:pointer; opacity:0;
+    animation: meteorFly var(--life, 1.9s) cubic-bezier(.33,.05,.55,.95) forwards;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .meteor i{
+    position:absolute; left:28px; top:15px; width:190px; height:2px;
+    transform-origin: 0 50%; transform: rotate(-21deg);
+    background: linear-gradient(90deg, #eaffff 0%, rgba(196,255,240,.55) 26%,
+                rgba(170,255,230,.18) 62%, rgba(170,255,230,0) 100%);
+    border-radius:2px; box-shadow: 0 0 16px rgba(150,255,225,.75);
+  }
+  .meteor b{
+    position:absolute; left:21px; top:9px; width:14px; height:14px; border-radius:50%;
+    background: radial-gradient(circle, #ffffff 0%, rgba(190,255,245,.85) 32%, rgba(150,255,225,0) 74%);
+    box-shadow: 0 0 18px rgba(170,255,240,.9);
+  }
+  @keyframes meteorFly{
+    0%   { opacity:0; transform: translate3d(0,0,0); }
+    7%   { opacity:1; }
+    88%  { opacity:1; }
+    100% { opacity:0; transform: translate3d(var(--dx), var(--dy), 0); }
+  }
+  .meteor.caught{ animation:none; opacity:0; transition:opacity .18s ease; }
+
+  /* 首次引导 */
+  #guide{
+    position:fixed; inset:0; z-index:9; display:flex;
+    align-items:center; justify-content:center;
+    padding-bottom: 16vh;          /* 往上抬一点，别正好压在树身上 */
+    pointer-events:none; opacity:0; transition:opacity .5s ease;
+  }
+  #guide.on{ opacity:1; }
+  .gd{
+    display:flex; flex-direction:column; align-items:center; gap:13px;
+    padding:16px 22px 15px; border-radius:2px;
+    border:1px solid rgba(111,227,184,.16);
+    background: rgba(4,12,16,.58);
+    backdrop-filter: blur(6px);
+    box-shadow: 0 10px 40px rgba(0,0,0,.45);
+  }
+  .gd-t{ font-size: clamp(9px, 1.05vmin, 12px); letter-spacing:.3em; color: rgba(205,240,232,.80); text-shadow:0 0 18px rgba(0,0,0,.7); }
+  .gd-t b{ color:#8fffd8; font-weight:500; }
+  .gd-ring{
+    width:54px; height:54px; border-radius:50%;
+    border:1px solid rgba(111,227,184,.60);
+    box-shadow: 0 0 26px rgba(111,227,184,.35), inset 0 0 18px rgba(111,227,184,.20);
+    animation: gdTap 1.5s ease-in-out infinite;
+  }
+  @keyframes gdTap{
+    0%,100%{ transform:scale(.84); opacity:.55; }
+    42%    { transform:scale(1.06); opacity:1; }
+  }
+  .gd-line{
+    width:104px; height:2px; border-radius:2px;
+    box-shadow: 0 0 14px rgba(143,255,216,.55);
+    background: linear-gradient(90deg, transparent, rgba(143,255,216,.9), transparent);
+    animation: gdSwipe 1.6s ease-in-out infinite;
+  }
+  @keyframes gdSwipe{
+    0%{ transform:translateX(-26px) scaleX(.5); opacity:.5; }
+    50%{ transform:translateX(0) scaleX(1); opacity:1; }
+    100%{ transform:translateX(26px) scaleX(.5); opacity:.5; }
+  }
+
+  /* 署名输入 */
+  #nameBox{
+    position:fixed; inset:0; z-index:70; display:none; place-items:center;
+    background: rgba(2,8,12,.74); backdrop-filter: blur(7px);
+  }
+  #nameBox.on{ display:grid; }
+  .nb{
+    width:min(340px, 82vw); padding:18px 18px 14px;
+    border:1px solid rgba(120,220,200,.26); background: rgba(6,17,21,.94);
+    box-shadow: 0 20px 60px rgba(0,0,0,.6), 0 0 30px rgba(111,227,184,.10);
+  }
+  .nb h4{ font-size:9px; letter-spacing:.32em; font-weight:400; color: rgba(160,210,200,.58); margin-bottom:11px; }
+  .nb input{
+    width:100%; padding:10px; font:inherit; font-size:13px; letter-spacing:.12em;
+    color:#eafff8; background: rgba(0,0,0,.38);
+    border:1px solid rgba(120,220,200,.22); outline:none;
+  }
+  .nb input:focus{ border-color: rgba(111,227,184,.62); box-shadow: 0 0 0 2px rgba(111,227,184,.12); }
+  .nb .tip{ margin-top:8px; font-size:8px; letter-spacing:.16em; color: rgba(150,195,190,.40); }
+  .nb-b{ display:flex; gap:8px; justify-content:flex-end; margin-top:13px; }
+  .nb-b button{
+    font:inherit; font-size:10px; letter-spacing:.2em; padding:9px 15px;
+    color:#dffaf2; background: rgba(111,227,184,.07);
+    border:1px solid rgba(111,227,184,.28); cursor:pointer; touch-action:manipulation;
+  }
+  .nb-b button:hover{ background: rgba(111,227,184,.18); }
+  .nb-b button.pri{ background: rgba(111,227,184,.18); border-color: rgba(111,227,184,.55); }
+  .nb .nb-l{
+    display:block; margin:11px 0 5px; font-size:8px; letter-spacing:.24em;
+    color: rgba(160,210,200,.46);
+  }
+  .nb .nb-l:first-of-type{ margin-top:0; }
+
+  /* 分享按钮：音效开关正下方，同一列 */
+  .snd.share{ top: calc(clamp(15px, 2.5vmin, 32px) + clamp(31px, 4.1vmin, 39px)); }
+  .snd.share .ic{ color: rgba(255,214,140,.78); }
+  .snd.share:hover{ color:#fff6e4; border-color: rgba(255,214,140,.50); }
+  .snd.share.glow{ animation: shGlow 2.8s ease-in-out infinite; }
+  @keyframes shGlow{
+    50%{ border-color: rgba(255,214,140,.62); box-shadow: 0 0 18px rgba(255,205,120,.28); color:#fff6e4; }
+  }
+
+  /* 「来自谁的祝福」：链接被送到别人手上时才出现 */
+  .bl-from{
+    margin-top:6px; font-size: clamp(8px, .9vmin, 10px);
+    letter-spacing:.16em; color: rgba(186,224,214,.66);
+  }
+  .bl-from[hidden]{ display:none; }
+  .bl-from b{ font-weight:400; color: rgba(220,248,240,.88); }
+
+  /* 二维码浮层：桌面上把手机接进来的唯一入口 */
+  #qrBox{
+    position:fixed; inset:0; z-index:72; display:none; place-items:center;
+    background: rgba(2,8,12,.80); backdrop-filter: blur(8px); padding:20px;
+  }
+  #qrBox.on{ display:grid; }
+  .qb{
+    width:min(320px, 86vw); padding:20px 20px 15px; text-align:center;
+    border:1px solid rgba(120,220,200,.26); background: rgba(6,17,21,.96);
+    box-shadow: 0 20px 60px rgba(0,0,0,.62), 0 0 34px rgba(111,227,184,.12);
+  }
+  .qb h4{ font-size:9px; letter-spacing:.3em; font-weight:400; color: rgba(160,210,200,.58); margin-bottom:14px; }
+  /* 注意：全局 canvas 是 position:fixed（给 #gl 用的），二维码画布必须改回静态流 */
+  #qrBox canvas{
+    position:static; inset:auto; display:block; margin:0 auto;
+    border-radius:2px; background:#eafff8;
+    box-shadow: 0 0 26px rgba(111,227,184,.20);
+  }
+  .qb-to{
+    margin-top:13px; font-size: clamp(10px, 1.1vmin, 12px);
+    letter-spacing:.16em; color: rgba(205,240,232,.82);
+  }
+  .qb-to b{ color:#8fffd8; font-weight:500; }
+  .qb .tip{ margin-top:7px; font-size:8px; letter-spacing:.16em; color: rgba(150,195,190,.40); }
+  .qb-b{ display:flex; gap:8px; justify-content:center; margin-top:14px; }
+  .qb-b button{
+    font:inherit; font-size:10px; letter-spacing:.2em; padding:9px 16px;
+    color:#dffaf2; background: rgba(111,227,184,.07);
+    border:1px solid rgba(111,227,184,.28); cursor:pointer; touch-action:manipulation;
+  }
+  .qb-b button:hover{ background: rgba(111,227,184,.18); }
+  .qb-b button.pri{ background: rgba(111,227,184,.18); border-color: rgba(111,227,184,.55); }
+
+  /* 横屏时高度只有三百多，把二维码卡片收紧，别让它在屏幕上滚动 */
+  @media (max-height: 480px){
+    .qb{ padding:12px 14px 10px; }
+    .qb h4{ margin-bottom:8px; font-size:8px; }
+    .qb-to{ margin-top:8px; font-size:10px; }
+    .qb .tip{ display:none; }
+    .qb-b{ margin-top:9px; }
+    .qb-b button{ padding:7px 12px; }
+  }
+
+  /* 键盘可达性 */
+  .tab:focus-visible, .snd:focus-visible, .bl-to:focus-visible,
+  .nb-b button:focus-visible, .nb input:focus-visible,
+  .qb-b button:focus-visible,
+  #gtSkip:focus-visible, #gtMute:focus-visible{
+    outline: 2px solid rgba(111,227,184,.78); outline-offset: 2px;
+  }
+
+  /* 手机端：触摸目标不小于 40px 高 */
+  @media (max-width: 720px){
+    .tab{ padding: 10px 9px; min-height: 40px; font-size: clamp(9px, 2.5vmin, 11px); }
+    .hint{ padding: 2px 0; }
+  }
+
+  /* 横屏（手机横过来）：把垂直方向的装饰全部收掉，给树让位 */
+  @media (orientation: landscape) and (max-height: 560px){
+    #ui{ padding: 10px 16px; padding-bottom: max(8px, env(safe-area-inset-bottom, 0px)); }
+    header{ gap:2px; }
+    .title{ font-size: 12px; letter-spacing:.3em; }
+    .bl-cn{ font-size: 15px; letter-spacing:.24em; }
+    .bl-en{ font-size:7px; letter-spacing:.3em; }
+    .bl-to{ margin-top:2px; padding:2px 0; }
+    .wish{ margin-top:3px; }
+    .mid{ display:none; }
+    footer{ gap:6px; }
+    .tab{ padding:7px 9px; min-height:32px; }
+    .hint{ display:none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="gl" aria-label="AURORA-7 粒子圣诞树：拖拽旋转，点按涟漪，双击点亮，长按放烟花"></canvas>
+
+<!-- 树顶星芒（位置每帧由投影算出来） -->
+<div id="starGlow" aria-hidden="true">
+  <span class="sc"></span><span class="sh"></span><span class="sv"></span>
+</div>
+
+<!-- 流星：划过时点一下就能收下 -->
+<div id="meteors" aria-hidden="true"></div>
+
+<!-- 集满愿望星时的极光爆发 -->
+<div id="auroraBurst" aria-hidden="true"></div>
+
+<div id="ui">
+  <header>
+    <div class="title">AURORA-7</div>
+    <div class="bless">
+      <div class="bl-cn"><span id="blessCn">圣诞快乐</span></div>
+      <div class="bl-en" id="blessEn">MERRY CHRISTMAS</div>
+      <button class="bl-to" id="blessTo" type="button" title="点击写下收礼人">
+        <span class="bl-to-l">致</span><span id="blessName">所有人</span>
+      </button>
+      <div class="bl-from" id="blessFrom" hidden>来自 <b id="blessFromName"></b> 的祝福</div>
+    </div>
+    <div class="wish" id="wishBar" hidden>
+      <span class="wish-i">✦</span><b id="wishNum">0</b><em id="wishMax">/ 5 愿望星</em>
+    </div>
+  </header>
+
+  <button id="sndBtn" class="snd wait" type="button" aria-label="音效开关">
+    <span class="ic">♪</span><i id="sndTxt">声音 开</i>
+  </button>
+
+  <button id="shareBtn" class="snd share" type="button" aria-label="把这棵树送给别人">
+    <span class="ic">✦</span><i id="shareTxt">送给 TA</i>
+  </button>
+
+  <div class="mid">
+    <div class="mname"><b id="mcn">极光</b><i id="men">AURORA</i></div>
+    <div class="mdesc" id="mdesc">冷绿极光沿树身缓慢流淌</div>
+  </div>
+
+  <footer>
+    <nav id="modes"></nav>
+    <div class="hint">
+      <span class="only-desk"><b>拖拽</b> 旋转 · <b>滚轮</b> 缩放 · <b>1–7</b> 切换 · <b>点按</b> 涟漪 · <b>长按</b> 烟花 · <b>空格</b> 轮播 · <b>S</b> 截图 · <b>H</b> 隐藏</span>
+      <span class="only-mob"><span id="hintRot"><b>单指</b>转 · <b>点按</b>涟漪 · <b>双击</b>点亮</span></span>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast"><span id="toastCn">全树点亮</span><span class="en" id="toastEn">ILLUMINATION</span></div>
+</div>
+
+<!-- 首次进入的手势引导，看过一次就不再出现 -->
+<div id="guide" aria-hidden="true">
+  <div class="gd">
+    <div id="gdIcon" class="gd-ring"></div>
+    <div class="gd-t" id="gdText"></div>
+  </div>
+</div>
+
+<!-- 祝福对象：写给谁 / 谁写的 -->
+<div id="nameBox">
+  <div class="nb">
+    <h4>这份祝福 · BLESSING</h4>
+    <label class="nb-l" for="toIn">致 · TO</label>
+    <input id="toIn" maxlength="12" placeholder="留空则写给所有人" autocomplete="off">
+    <label class="nb-l" for="fromIn">来自 · FROM</label>
+    <input id="fromIn" maxlength="12" placeholder="留空则不署名" autocomplete="off">
+    <div class="tip">只存在这台设备上，不会上传</div>
+    <div class="nb-b">
+      <button id="nbNo" type="button">取消</button>
+      <button id="nbOk" type="button" class="pri">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 二维码：桌面端把手机接进来的入口 -->
+<div id="qrBox" role="dialog" aria-modal="true" aria-label="扫码把这棵树带走">
+  <div class="qb">
+    <h4>扫码带走 · SCAN</h4>
+    <canvas id="qrCanvas" width="228" height="228" aria-label="分享链接二维码"></canvas>
+    <div class="qb-to" id="qrTo">致 · 所有人</div>
+    <div class="tip">手机扫一下，或用下面的按钮复制链接</div>
+    <div class="qb-b">
+      <button id="qrCopy" type="button">复制链接</button>
+      <button id="qrClose" type="button" class="pri">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div id="err"></div>
+
+<!-- 授权门：手机端进场前的三步互动确认（点按 / 长按 / 滑动） -->
+<div id="gate" aria-hidden="true">
+  <div class="gt-grid"></div>
+  <div class="gt-sweep"></div>
+
+  <div class="gt-frame">
+    <span class="c tl"></span><span class="c tr"></span>
+    <span class="c bl"></span><span class="c br"></span>
+    <span class="vl"></span><span class="vr"></span>
+  </div>
+
+  <div class="gt-head">
+    <div class="b">AURORA-7</div>
+  </div>
+  <div class="gt-meta">
+    <div class="skip" id="gtMute">声音 ON</div>
+    <div class="skip" id="gtSkip">跳过 SKIP</div>
+  </div>
+
+  <div class="gt-body" id="gtBody">
+    <div class="gt-cn" id="gtCn">需要访问许可</div>
+    <div class="gt-en" id="gtEn">ACCESS PERMISSION REQUIRED</div>
+    <div class="gt-rule"></div>
+    <div class="gt-act" id="gtAct"></div>
+  </div>
+
+  <div class="gt-ok" id="gtOk"></div>
+
+  <div class="gt-step"><b id="gtNo">01</b> / 03 <i id="gtTag">AUTHORIZATION</i></div>
+  <div class="gt-stat"><span id="gtStat">等待用户授权…</span><i id="gtStatEn">AWAITING OPERATOR CONSENT</i></div>
+</div>
+
+<!-- 入场序列：树在它底下自下而上生长，两者共用同一条时间轴 -->
+<div id="boot" aria-hidden="true">
+  <div class="bt-veil" id="btVeil"></div>
+  <div class="bt-grid"></div>
+  <div class="bt-scan"></div>
+
+  <!-- 中心准星 -->
+  <div class="bt-core">
+    <div class="bt-ring r1"></div>
+    <div class="bt-ring r2"></div>
+    <div class="bt-ring r3"></div>
+    <div class="bt-cross"></div>
+    <div class="bt-pulse"></div>
+    <div class="bt-pulse p2"></div>
+    <div class="bt-dot"></div>
+  </div>
+
+
+  <!-- 角标信息 -->
+  <div class="bt-hud tl">
+    <div class="brand">AURORA-7</div>
+  </div>
+
+  <!-- 终端日志 -->
+  <div class="bt-log" id="btLog"></div>
+  <div class="bt-bar"><i id="btFill"></i></div>
+  <div class="bt-pct" id="btPct">000%</div>
+
+  <!-- 收尾爆发 -->
+  <div class="bt-burst b1" id="btBurst1"></div>
+  <div class="bt-burst b2" id="btBurst2"></div>
+  <div class="bt-flash" id="btFlash"></div>
+</div>
+
+<script>
+"use strict";
+(function () {
+
+/* ============================================================
+   AURORA-7 · 单文件粒子圣诞树
+   ------------------------------------------------------------
+   改之前先看这张表，比在三千行里翻快得多：
+
+     1    基础工具        随机数、矩阵、GL 编译
+     1.5  QR 编码器       分享链接转二维码（byte 模式 / 纠错 L / 版本 1-6）
+     2    树的几何        枝条 / 灯串 / 顶星 / 地面倒影 / 背景星
+     3    WebGL          着色器、渲染目标、调色板（含颜色过渡）
+     4    模式定义        七档光效
+     4.5  声音            星光圆舞曲 / 科技语音 / 轻音效
+     5    应用            状态、资源、resize
+     5.2  祝福语与玩法    收礼人、分享与二维码、流星许愿、极光爆发、首次引导
+     5.5  交互            手势识别、键盘、音效开关
+     6    每帧            update / fillDynamic / render
+     7    入场与授权门    冷启动序列、三步确认
+     8    启动            boot() 与调试参数
+
+   所有动画都在顶点着色器里算，粒子数据只上传一次；
+   JS 每帧只负责相机、雪、火花这三件事。
+   ============================================================ */
+const AURORA_VERSION = '2026.12.25-r7';
+
+/* ============================================================
+   1. 基础工具
+   ============================================================ */
+
+const TAU = Math.PI * 2;
+
+function makeRng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+let rnd = makeRng(20261225);
+const rf = (a, b) => a + (b - a) * rnd();
+const gauss = (s) => {
+  // Box-Muller
+  let u = 0, v = 0;
+  while (u === 0) u = rnd();
+  while (v === 0) v = rnd();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v) * s;
+};
+
+/* ============================================================
+   1.5 QR 编码器
+   只为"把这条分享链接传到手机上"服务：byte 模式、纠错 L、版本 1-9。
+   不引 CDN，也不做多字符集与结构化追加 —— 一条 URL 最多能塞 232 字节，
+   超了就让调用方退回"复制链接"。
+   ============================================================ */
+const QR = (function () {
+
+
+    let EXP = new Uint8Array(512), LOG = new Uint8Array(256);
+    (function () {
+      let x = 1;
+      for (let i = 0; i < 255; i++) { EXP[i] = x; LOG[x] = i; x <<= 1; if (x & 0x100) x ^= 0x11d; }
+      for (let j = 255; j < 512; j++) EXP[j] = EXP[j - 255];
+    })();
+    function gmul(a, b) { return (a === 0 || b === 0) ? 0 : EXP[LOG[a] + LOG[b]]; }
+
+    // 版本 -> { 每块纠错码字数, 各块数据码字数 }
+    let SPEC = {
+      1: { ec: 7,  blocks: [19] },
+      2: { ec: 10, blocks: [34] },
+      3: { ec: 15, blocks: [55] },
+      4: { ec: 20, blocks: [80] },
+      5: { ec: 26, blocks: [108] },
+      6: { ec: 18, blocks: [68, 68] },
+      7: { ec: 20, blocks: [78, 78] },
+      8: { ec: 24, blocks: [97, 97] },
+      9: { ec: 30, blocks: [116, 116] }
+    };
+    let ALIGN = {
+      1: [], 2: [6, 18], 3: [6, 22], 4: [6, 26], 5: [6, 30],
+      6: [6, 34], 7: [6, 22, 38], 8: [6, 24, 42], 9: [6, 26, 46]
+    };
+    let MAX_VER = 9;
+
+    let genCache = {};
+    function genPoly(n) {
+      if (genCache[n]) return genCache[n];
+      let p = [1];
+      for (let i = 0; i < n; i++) {
+        let q = [1, EXP[i]];
+        let r = new Array(p.length + 1);
+        for (let a = 0; a < r.length; a++) r[a] = 0;
+        for (let k = 0; k < p.length; k++)
+          for (let b = 0; b < 2; b++) r[k + b] ^= gmul(p[k], q[b]);
+        p = r;
+      }
+      genCache[n] = p;
+      return p;
+    }
+    function ecc(data, n) {
+      let gen = genPoly(n);
+      let res = new Uint8Array(data.length + n);
+      res.set(data, 0);
+      for (let i = 0; i < data.length; i++) {
+        let f = res[i];
+        if (f === 0) continue;
+        for (let j = 0; j < gen.length; j++) res[i + j] ^= gmul(gen[j], f);
+      }
+      return res.subarray(data.length);
+    }
+
+    function dataCap(ver) {
+      let s = 0, b = SPEC[ver].blocks;
+      for (let i = 0; i < b.length; i++) s += b[i];
+      return s;
+    }
+
+    function encode(text) {
+      let bytes = new TextEncoder().encode(text);
+      let ver = 0;
+      for (let v = 1; v <= MAX_VER; v++) if (bytes.length <= dataCap(v) - 2) { ver = v; break; }
+      if (!ver) return null;
+
+      let bits = [];
+      function put(val, n) { for (let i = n - 1; i >= 0; i--) bits.push((val >>> i) & 1); }
+
+      put(4, 4);                  // byte 模式
+      put(bytes.length, 8);       // 版本 1-9：8 位字符计数
+      for (let i = 0; i < bytes.length; i++) put(bytes[i], 8);
+
+      let capBits = dataCap(ver) * 8;
+      for (let t = 0; t < 4 && bits.length < capBits; t++) bits.push(0);   // 终止符
+      while (bits.length % 8) bits.push(0);
+      let PAD = [0xEC, 0x11], pi = 0;
+      while (bits.length < capBits) { put(PAD[pi++ % 2], 8); }
+
+      let dc = new Uint8Array(capBits / 8);
+      for (let c = 0; c < dc.length; c++) {
+        let val = 0;
+        for (let j = 0; j < 8; j++) val = (val << 1) | bits[c * 8 + j];
+        dc[c] = val;
+      }
+
+      // 分块、算纠错、交织
+      let blocks = [], off = 0, spec = SPEC[ver];
+      for (let bi = 0; bi < spec.blocks.length; bi++) {
+        let len = spec.blocks[bi];
+        let d = dc.subarray(off, off + len); off += len;
+        blocks.push({ d: d, e: ecc(d, spec.ec) });
+      }
+      let maxD = 0;
+      for (let m0 = 0; m0 < spec.blocks.length; m0++) maxD = Math.max(maxD, spec.blocks[m0]);
+      let out = [];
+      for (let r0 = 0; r0 < maxD; r0++)
+        for (let b0 = 0; b0 < blocks.length; b0++) if (r0 < blocks[b0].d.length) out.push(blocks[b0].d[r0]);
+      for (let r1 = 0; r1 < spec.ec; r1++)
+        for (let b1 = 0; b1 < blocks.length; b1++) out.push(blocks[b1].e[r1]);
+
+      return { ver: ver, codewords: out };
+    }
+
+    function maskFn(m, x, y) {
+      switch (m) {
+        case 0: return (x + y) % 2 === 0;
+        case 1: return y % 2 === 0;
+        case 2: return x % 3 === 0;
+        case 3: return (x + y) % 3 === 0;
+        case 4: return (Math.floor(y / 2) + Math.floor(x / 3)) % 2 === 0;
+        case 5: return ((x * y) % 2) + ((x * y) % 3) === 0;
+        case 6: return (((x * y) % 2) + ((x * y) % 3)) % 2 === 0;
+        case 7: return (((x + y) % 2) + ((x * y) % 3)) % 2 === 0;
+      }
+      return false;
+    }
+
+    // 纠错级别 L = 01
+    function fmtBits(mask) {
+      let d = (1 << 3) | mask;
+      let rem = d << 10;
+      for (let i = 4; i >= 0; i--) if ((rem >>> (i + 10)) & 1) rem ^= 0x537 << i;
+      return ((d << 10) | rem) ^ 0x5412;
+    }
+
+    // 版本信息（v7 以上才有）：6 位版本号 + 12 位 BCH，生成多项式 0x1F25
+    function verBits(ver) {
+      let rem = ver;
+      for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1F25);
+      return (ver << 12) | rem;
+    }
+
+    function build(ver, codewords, mask) {
+      let size = 17 + 4 * ver;
+      let m = [], fn = [];
+      for (let y = 0; y < size; y++) { m.push(new Uint8Array(size)); fn.push(new Uint8Array(size)); }
+      function set(x, y, v) { m[y][x] = v; fn[y][x] = 1; }
+
+      // 定位图案（含分隔符）
+      function finder(ox, oy) {
+        for (let dy = -1; dy <= 7; dy++)
+          for (let dx = -1; dx <= 7; dx++) {
+            let x = ox + dx, y = oy + dy;
+            if (x < 0 || y < 0 || x >= size || y >= size) continue;
+            let inA = dx >= 0 && dx <= 6 && dy >= 0 && dy <= 6;
+            let dark = inA && (dx === 0 || dx === 6 || dy === 0 || dy === 6 ||
+                               (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4));
+            set(x, y, dark ? 1 : 0);
+          }
+      }
+      finder(0, 0); finder(size - 7, 0); finder(0, size - 7);
+
+      // 时序图案
+      for (let i = 8; i < size - 8; i++) {
+        set(i, 6, i % 2 === 0 ? 1 : 0);
+        set(6, i, i % 2 === 0 ? 1 : 0);
+      }
+
+      // 对齐图案
+      let al = ALIGN[ver];
+      for (let ai = 0; ai < al.length; ai++)
+        for (let aj = 0; aj < al.length; aj++) {
+          let cx = al[ai], cy = al[aj];
+          if ((cx === 6 && cy === 6) || (cx === 6 && cy === size - 7) || (cx === size - 7 && cy === 6)) continue;
+          for (let ey = -2; ey <= 2; ey++)
+            for (let ex = -2; ex <= 2; ex++)
+              set(cx + ex, cy + ey, Math.max(Math.abs(ex), Math.abs(ey)) !== 1 ? 1 : 0);
+        }
+
+      // 暗模块
+      set(8, size - 8, 1);
+
+      // 版本信息（v7 以上）：右上 3x6 与左下 6x3 各放一份
+      if (ver >= 7) {
+        let vb = verBits(ver);
+        for (let vi = 0; vi < 18; vi++) {
+          let vbit = (vb >>> vi) & 1;
+          let va = size - 11 + (vi % 3);
+          let vc = Math.floor(vi / 3);
+          set(va, vc, vbit);
+          set(vc, va, vbit);
+        }
+      }
+
+      // 格式信息（两块副本，先占位）
+      let f = fmtBits(mask);
+      function fb(k) { return (f >>> k) & 1; }
+      for (let b0 = 0; b0 <= 5; b0++) set(8, b0, fb(b0));
+      set(8, 7, fb(6));
+      set(8, 8, fb(7));
+      set(7, 8, fb(8));
+      for (let b1 = 9; b1 <= 14; b1++) set(14 - b1, 8, fb(b1));
+      for (let b2 = 0; b2 <= 7; b2++) set(size - 1 - b2, 8, fb(b2));
+      for (let b3 = 8; b3 <= 14; b3++) set(8, size - 7 + (b3 - 8), fb(b3));
+      // 格式区旁边的固定暗点
+      set(8, size - 8, 1);
+
+      // 数据放置：从右下角向上折返
+      let total = codewords.length * 8, bitIdx = 0;
+      for (let right = size - 1; right >= 1; right -= 2) {
+        if (right === 6) right = 5;
+        for (let vert = 0; vert < size; vert++) {
+          for (let jj = 0; jj < 2; jj++) {
+            let x2 = right - jj;
+            let upward = ((right + 1) & 2) === 0;
+            let y2 = upward ? size - 1 - vert : vert;
+            if (fn[y2][x2]) continue;
+            let bit = 0;
+            if (bitIdx < total) {
+              let byteI = bitIdx >> 3, bitI = 7 - (bitIdx & 7);
+              bit = (codewords[byteI] >>> bitI) & 1;
+              bitIdx++;
+            }
+            m[y2][x2] = bit ^ (maskFn(mask, x2, y2) ? 1 : 0);
+          }
+        }
+      }
+      return m;
+    }
+
+    // 掩码惩罚：连续同色 / 2x2 同色 / 深色比例
+    function penalty(m) {
+      let n = m.length, p = 0, x, y, run, i;
+      for (y = 0; y < n; y++) {
+        run = 1;
+        for (x = 1; x < n; x++) {
+          if (m[y][x] === m[y][x - 1]) run++;
+          else { if (run >= 5) p += 3 + (run - 5); run = 1; }
+        }
+        if (run >= 5) p += 3 + (run - 5);
+      }
+      for (x = 0; x < n; x++) {
+        run = 1;
+        for (y = 1; y < n; y++) {
+          if (m[y][x] === m[y - 1][x]) run++;
+          else { if (run >= 5) p += 3 + (run - 5); run = 1; }
+        }
+        if (run >= 5) p += 3 + (run - 5);
+      }
+      for (y = 0; y < n - 1; y++)
+        for (x = 0; x < n - 1; x++) {
+          let v = m[y][x];
+          if (v === m[y][x + 1] && v === m[y + 1][x] && v === m[y + 1][x + 1]) p += 3;
+        }
+      let dark = 0;
+      for (y = 0; y < n; y++) for (x = 0; x < n; x++) dark += m[y][x];
+      let pct = dark * 100 / (n * n);
+      p += Math.floor(Math.abs(pct - 50) / 5) * 10;
+      return p;
+    }
+
+    function make(text) {
+      let enc = encode(text);
+      if (!enc) return null;
+      let best = null, bestP = Infinity, bestMask = 0;
+      for (let mask = 0; mask < 8; mask++) {
+        let m = build(enc.ver, enc.codewords, mask);
+        let p = penalty(m);
+        if (p < bestP) { bestP = p; best = m; bestMask = mask; }
+      }
+      return { size: best.length, modules: best, version: enc.ver, mask: bestMask };
+    }
+
+  return { make: make };
+})();
+
+/* ---- 4x4 矩阵（列主序） ---- */
+function m4Perspective(fovy, aspect, near, far) {
+  const f = 1 / Math.tan(fovy * 0.5), nf = 1 / (near - far);
+  return new Float32Array([
+    f / aspect, 0, 0, 0,
+    0, f, 0, 0,
+    0, 0, (far + near) * nf, -1,
+    0, 0, 2 * far * near * nf, 0
+  ]);
+}
+function m4Mul(a, b) {
+  const o = new Float32Array(16);
+  for (let c = 0; c < 4; c++) {
+    for (let r = 0; r < 4; r++) {
+      o[c * 4 + r] =
+        a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] +
+        a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
+    }
+  }
+  return o;
+}
+
+/* ============================================================
+   2. 树的几何 —— 按真实针叶树的生长结构逐枝生成
+   ============================================================ */
+
+const TREE_H = 6.10;          // 树高（世界单位）
+const TREE_R = 2.38;          // 树底半径（高宽比 ≈ 1.4，接近真树的瘦高轮廓）
+const LAYERS = 34;            // 轮生层数
+const GOLDEN = 2.39996323;    // 黄金角，层间错开用
+
+// 归一化高度(0 底 / 1 顶) → 该处的枝条展开半径
+function treeRadius(hn) {
+  const t = Math.max(0, 1 - hn);
+  return TREE_R * (Math.pow(t, 0.70) * 0.955 + 0.045);
+}
+
+// 粒子种类
+const K_LEAF = 0, K_GARLAND = 1, K_STAR = 2, K_GROUND = 3,
+      K_SNOW = 4, K_BGSTAR = 5, K_SPARK = 6, K_TRUNK = 7;
+
+const STRIDE = 10;          // 每粒子 float 数
+// [x, y, z, size, slot, kind, phase, hn, rn, gain]
+
+class Buf {
+  constructor(cap) {
+    this.cap = cap;
+    this.n = 0;
+    this.a = new Float32Array(cap * STRIDE);
+  }
+  reserve(k) {
+    if (this.n + k <= this.cap) return true;
+    const nc = Math.max(this.cap * 2, this.n + k);
+    const na = new Float32Array(nc * STRIDE);
+    na.set(this.a);
+    this.a = na; this.cap = nc;
+    return true;
+  }
+  push(x, y, z, size, slot, kind, phase, hn, rn, gain) {
+    this.reserve(1);
+    const o = this.n * STRIDE, a = this.a;
+    a[o] = x; a[o + 1] = y; a[o + 2] = z;
+    a[o + 3] = size; a[o + 4] = slot; a[o + 5] = kind;
+    a[o + 6] = phase; a[o + 7] = hn; a[o + 8] = rn; a[o + 9] = gain;
+    this.n++;
+  }
+}
+
+function buildTree() {
+  const b = new Buf(60000);
+  const H2 = TREE_H * 0.5;
+
+  /* ---------- 主干 + 枝条 + 针叶 ---------- */
+  for (let li = 0; li < LAYERS; li++) {
+    const s = li / (LAYERS - 1);                   // 0 底 → 1 顶
+    const y = TREE_H * (0.010 + 0.955 * s);
+    // 层间起伏：奇偶层交替外扩 / 内收，侧面看就是一层层的"盘"
+    // 再叠一道 6 层一个周期的裙边 —— 层沿那一圈整体外扩、往上迅速收窄。
+    // 没有这一道，剪影就是个光滑的锥；有了它，侧面才有明显的"分节"，
+    // 远看才像圣诞树而不是冰淇淋筒
+    const skirt = Math.exp(-Math.pow(((li % 6) / 6 - 0.02) * 4.0, 2));
+    const layerW = 1
+      + 0.072 * Math.sin(li * 1.31 + 0.7)
+      + 0.038 * Math.sin(li * 2.87)
+      + 0.118 * skirt;
+    const baseR = treeRadius(s) * layerW;
+    if (baseR < 0.022) continue;
+
+    // 每层枝条数：底部 9 根、顶部 3 根。
+    // 关键是"少" —— 枝条一多就会把整个圆周铺满，树变成密不透风的实心锥；
+    // 枝条之间留出的空隙，才是能看到内部层次和背后轮廓的原因。
+    const nB = Math.max(5, Math.round(14 - 9.5 * s));
+    const layerOff = li * GOLDEN;
+
+    for (let bi = 0; bi < nB; bi++) {
+      const ang = layerOff + (bi / nB) * TAU + gauss(0.075);
+      const ca = Math.cos(ang), sa = Math.sin(ang);
+      // 同层枝条长度接近 → 边缘才能形成清晰的一圈"裙边"
+      const bl = baseR * (0.88 + 0.16 * rnd());
+      const branchLit = 0.74 + 0.50 * rnd();
+      const layerLit = 0.70 + 0.52 * (0.5 + 0.5 * Math.sin(li * 1.73 + 0.4));
+      // 枝条少了，单枝就得稠密，否则整棵树会秃。
+      // 高度再补一个系数：底部枝条长、投影压缩后粒子会挤成一团，
+      // 所以底部反而要稀一点，让上下重量平衡
+      const nLeaf = Math.round((10 + bl * 30) * (0.66 + 0.46 * s));
+
+      for (let k = 0; k < nLeaf; k++) {
+        // 枝根也要有粒子，但只到 0.095 —— 再往里所有枝条会堆到轴心上，
+        // 糊成一根竖亮线；完全跳开又会让树底中心空出一个 V 形缺口
+        const t = 0.095 + 0.905 * (k + 0.5) / nLeaf;
+        const rad = bl * t;
+        // 枝条弯法：先平展，越靠枝尖越下垂；底层的硬枝条垂得少
+        const droop = 0.30 * Math.pow(t, 2.1) * bl * (0.26 + 0.95 * s);
+        const cx = ca * rad, cz = sa * rad;
+        const cy = y - droop;
+
+        // 针叶簇：切向 + 径向 + 垂向散开，越靠枝尖越松
+        const spreadT = (0.022 + 0.052 * t) * (0.45 + bl * 0.34);
+        const spreadR = spreadT * 0.55;
+        const spreadV = 0.024 + 0.058 * t;
+
+        const tx = -sa, tz = ca;                     // 切向单位向量
+        const ot = gauss(1) * spreadT;
+        const orr = gauss(1) * spreadR;
+        const ov = gauss(1) * spreadV - 0.008 - 0.032 * t;
+
+        const x = cx + tx * ot + ca * orr;
+        const z = cz + tz * ot + sa * orr;
+        const yy = cy + ov;
+
+        const hn0 = (yy + H2) / TREE_H;
+        const hn = hn0;
+        const localR = treeRadius(Math.max(0, Math.min(1, hn0)));
+        const rn = localR > 1e-3 ? Math.min(1.25, Math.hypot(x, z) / localR) : 0.0;
+
+        // 亮度：枝尖亮 + 外围亮（受光在轮廓），内部压暗 —— 体积感全靠这个
+        const tip = 0.42 + 0.62 * t;
+        const rim = 0.26 + 1.00 * rn;
+        // 透视把小俯角下的底部压扁，粒子会在屏幕上高度重叠；
+        // 这一项按高度压暗底部，避免堆成一团过曝的绿雾
+        const hFade = 0.48 + 0.50 * Math.min(1, hn0 * 1.5);
+        let gain = Math.min(1.00, tip * rim * hFade * branchLit * layerLit);
+        // 树心必须真的暗下去：越靠轴心越弱，中间才有"空洞"，不是实心球
+        if (rn < 0.58) gain *= 0.34 + 0.66 * (rn / 0.58);
+        if (rnd() < 0.045) gain *= 2.3;   // 偶尔一颗特别亮，像被光直射的针叶
+
+        // 尺寸要分档：小颗粒铺底、中等颗粒成团、大颗粒点缀。
+        // 全都一样大的话，加色叠加后会变成均匀噪点，缺少颗粒层次
+        const sr = rnd();
+        const sz = sr < 0.52 ? 2.6 + rnd() * 1.2
+                 : sr < 0.87 ? 4.0 + rnd() * 1.4
+                             : 6.0 + rnd() * 1.8;
+        b.push(x, yy - H2, z, sz, 0, K_LEAF, rnd() * TAU,
+               Math.max(0, Math.min(1.15, hn)), rn, gain);
+      }
+    }
+  }
+
+  /* ---------- 树干（底部露出的一截） ---------- */
+  for (let i = 0; i < 700; i++) {
+    const t = rnd();                                  // 0 底 → 1 上
+    const yy = TREE_H * 0.10 * t;
+    const r = (0.215 - 0.105 * t) * Math.sqrt(rnd());
+    const a = rnd() * TAU;
+    // 太暗会变成树底一个黑窟窿（左右两簇粒子夹着一条空缝），要能看见
+    b.push(Math.cos(a) * r, yy - H2, Math.sin(a) * r, 4.2, 0, K_TRUNK,
+           rnd() * TAU, Math.max(0, yy / TREE_H), Math.min(1, r / TREE_R),
+           0.20 + 0.26 * rnd());
+  }
+
+  /* ---------- 树体内部填充：让树不是空壳 ---------- */
+  for (let i = 0; i < 1900; i++) {
+    const hn = Math.pow(rnd(), 0.72) * 0.99;
+    const y = TREE_H * hn;
+    const localR = treeRadius(hn);
+    const rr = localR * (0.26 + 0.74 * Math.pow(rnd(), 0.42)) * 0.92;
+    const a = rnd() * TAU;
+    const rn = localR > 1e-3 ? Math.min(1.25, rr / localR) : 0.0;
+    b.push(Math.cos(a) * rr, y - H2, Math.sin(a) * rr,
+           3.4, 0, K_LEAF, rnd() * TAU, hn, rn,
+           (0.09 + 0.16 * rnd()) * (0.40 + 0.90 * rn));
+  }
+  return b;
+}
+
+/* ---------- 螺旋灯带：贴着树表面缠绕 ---------- */
+function buildGarland() {
+  const b = new Buf(3600);
+  const H2 = TREE_H * 0.5;
+  const turns = 7.4, n = 1500;
+
+  for (let i = 0; i < n; i++) {
+    const s = i / (n - 1);
+    const y = TREE_H * (0.025 + 0.945 * s);
+    const baseR = treeRadius(s);
+    // 贴着表面，带内外起伏，看起来是"绕在枝叶之间"
+    const rad = baseR * (0.915 + 0.105 * Math.sin(s * 48.0)) + 0.015;
+    const ang = turns * TAU * s + 0.55;
+
+    const bead = (i % 5 === 0);
+    const x = Math.cos(ang) * rad + gauss(0.006);
+    const z = Math.sin(ang) * rad + gauss(0.006);
+    const yy = y + gauss(0.006);
+
+    // 细线 + 亮点：小珠压细成线，大珠明显更亮更大，才有"灯串"而不是"光带"
+    b.push(x, yy - H2, z, bead ? 8.4 : 3.2, bead ? 6 : 8, K_GARLAND,
+           rnd() * TAU, s, Math.min(1, rad / TREE_R), bead ? 0.88 : 0.52);
+  }
+  return b;
+}
+
+/* ---------- 顶部五角星 ---------- */
+function buildStar() {
+  const b = new Buf(1400);
+  const H2 = TREE_H * 0.5;
+  const ay = TREE_H + 0.26 - H2;          // 树顶上方
+  const R_out = 0.520, R_in = 0.214;
+
+  // 五角星 10 个顶点（外尖 + 内凹）
+  const px = [], py = [];
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 5;
+    const r = (i % 2 === 0) ? R_out : R_in;
+    px.push(Math.cos(a) * r);
+    py.push(Math.sin(a) * r);
+  }
+  // 射线法判断点是否在星内
+  const inside = (x, y) => {
+    let c = false;
+    for (let i = 0, j = 9; i < 10; j = i++) {
+      if ((py[i] > y) !== (py[j] > y) &&
+          x < (px[j] - px[i]) * (y - py[i]) / (py[j] - py[i]) + px[i]) c = !c;
+    }
+    return c;
+  };
+
+  // 拒绝采样：分布均匀，不会出现网格纹
+  let placed = 0, guard = 0;
+  while (placed < 320 && guard++ < 40000) {
+    const u = rf(-1, 1) * R_out, v = rf(-1, 1) * R_out;
+    if (!inside(u, v)) continue;
+    const d = Math.hypot(u, v) / R_out;
+    b.push(u, ay + v, 0, d > 0.86 ? 3.2 : 2.5, 0, K_STAR, rnd() * TAU,
+           1.0, d, 0.95 - 0.38 * d);
+    placed++;
+  }
+
+  // 放射光针：长短交替
+  for (let k = 0; k < 8; k++) {
+    const a = k * TAU / 8 + Math.PI / 8;
+    const L = (k % 2 === 0) ? 0.64 : 0.34;
+    const m = 26;
+    for (let j = 0; j < m; j++) {
+      const t = (j + 1) / m;
+      const r = t * L;
+      const fall = Math.pow(1 - t, 2.1);
+      b.push(Math.cos(a) * r * 1.30, ay + Math.sin(a) * r * 1.30, 0,
+             3.2, 0, K_STAR, rnd() * TAU, 1.0, t, 0.45 + 0.85 * fall);
+    }
+  }
+  return b;
+}
+
+/* ---------- 地面光池 + 倒影 ---------- */
+function buildGround(treeBuf) {
+  const b = new Buf(16000);
+  const H2 = TREE_H * 0.5;
+
+  // 光池：数量不能多。28 世界单位的粒子在屏幕上约 26px，
+  // 早先 420 个叠在一起直接糊成一块绿雾，把树底吃掉
+  for (let i = 0; i < 240; i++) {
+    const a = rnd() * TAU;
+    const r = TREE_R * (1.42 * Math.sqrt(rnd()));
+    const fall = 1 - r / (TREE_R * 1.42);
+    b.push(Math.cos(a) * r, -H2 + gauss(0.010), Math.sin(a) * r,
+           28.0, 1, K_GROUND, rnd() * TAU, 0, r / TREE_R,
+           0.05 + 0.19 * Math.pow(fall, 2.2));
+  }
+
+  // 倒影：以树底平面为镜面，向下压缩 0.46 倍并压暗
+  const src = treeBuf.a, n = treeBuf.n;
+  for (let i = 0; i < n; i += 1) {
+    if (rnd() > 0.235) continue;
+    const o = i * STRIDE;
+    if (src[o + 5] === K_TRUNK) continue;
+    const y = src[o + 1];
+    // 0.58 的压缩比让倒影"站得住"，再给一点竖向抖动当作水面的碎光
+    const yr = -H2 - 0.58 * (y + H2) + gauss(0.022);
+    b.push(src[o] * (1 + gauss(0.012)), yr, src[o + 2] * (1 + gauss(0.012)),
+           src[o + 3] * 1.72, 1, K_GROUND, src[o + 6], 0,
+           src[o + 8], src[o + 9] * 0.44);
+  }
+  return b;
+}
+
+/* ---------- 背景星野 ---------- */
+function buildBgStars() {
+  const b = new Buf(700);
+  for (let i = 0; i < 110; i++) {
+    // 远处球壳上撒点
+    const a = rnd() * TAU;
+    const u = rnd() * 2 - 1;
+    const r = 46 + rnd() * 26;
+    const sxy = Math.sqrt(1 - u * u);
+    b.push(Math.cos(a) * sxy * r, u * r * 0.72, Math.sin(a) * sxy * r,
+           1.9 + rnd() * 2.8, 10, K_BGSTAR, rnd() * TAU, 0, 0,
+           0.08 + 0.40 * Math.pow(rnd(), 2.6));
+  }
+  return b;
+}
+
+/* ============================================================
+   3. WebGL
+   ============================================================ */
+
+const canvas = document.getElementById('gl');
+const errBox = document.getElementById('err');
+
+function fail(msg) {
+  errBox.style.display = 'grid';
+  errBox.textContent = msg;
+  throw new Error(msg);
+}
+
+const glOpts = { antialias: false, alpha: false, depth: false, stencil: false,
+                 premultipliedAlpha: false, powerPreference: 'high-performance' };
+let gl = canvas.getContext('webgl2', glOpts);
+const isGL2 = !!gl;
+if (!gl) gl = canvas.getContext('webgl', glOpts);
+if (!gl) fail('当前浏览器不支持 WebGL，无法渲染。请用 Chrome / Edge / Firefox 打开。');
+
+/* 手机切后台久了 WebGL 上下文可能被系统回收：拦下默认行为允许恢复，
+   恢复后直接重载一帧——重建整条 GL 管线不如重载干净，且用户看不到中间态 */
+canvas.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();
+}, false);
+canvas.addEventListener('webglcontextrestored', () => {
+  try { location.reload(); } catch (_) {}
+}, false);
+
+let floatTarget = false;
+if (isGL2) {
+  floatTarget = !!(gl.getExtension('EXT_color_buffer_float') ||
+                   gl.getExtension('EXT_color_buffer_half_float'));
+} else {
+  gl.getExtension('OES_texture_half_float');
+  floatTarget = false;
+}
+
+/* ---------- 编译工具 ---------- */
+function shader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(s), '\n---\n', src);
+    fail('着色器编译失败：' + gl.getShaderInfoLog(s));
+  }
+  return s;
+}
+function program(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, shader(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, shader(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) fail('着色器链接失败：' + gl.getProgramInfoLog(p));
+  // 收集 uniform / attribute 位置
+  p.u = {}; p.a = {};
+  const nu = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < nu; i++) {
+    const info = gl.getActiveUniform(p, i);
+    p.u[info.name.replace('[0]', '')] = gl.getUniformLocation(p, info.name);
+  }
+  const na = gl.getProgramParameter(p, gl.ACTIVE_ATTRIBUTES);
+  for (let i = 0; i < na; i++) {
+    const info = gl.getActiveAttrib(p, i);
+    p.a[info.name] = gl.getAttribLocation(p, info.name);
+  }
+  return p;
+}
+
+/* ---------- 粒子着色器 ---------- */
+const VS_PARTICLE = `
+precision highp float;
+attribute vec3  a_pos;
+attribute float a_size;
+attribute float a_slot;
+attribute float a_kind;
+attribute float a_phase;
+attribute float a_hn;
+attribute float a_rn;
+attribute float a_gain;
+
+uniform mat4      u_vp;
+uniform float     u_focal;
+uniform float     u_sizeK;
+uniform float     u_time;
+uniform float     u_gl;
+uniform int       u_mode;
+uniform sampler2D u_pal;
+uniform vec2      u_viewDir;
+uniform vec3      u_waveO;    // 冲击波原点（世界坐标）
+uniform float     u_waveT;    // 冲击波已扩散时间，< 0 表示未激活
+uniform float     u_shake;    // 摇一摇的摆幅
+uniform float     u_flash;    // 全树点亮：一次性的整体提亮，指数衰减
+uniform float     u_reveal;   // 入场显形：< 0 未开始，>= 1.2 全显
+
+varying vec3  v_col;
+varying float v_bright;
+
+vec3 pal(float i){
+  return texture2DLod(u_pal, vec2((clamp(i,0.0,11.0) + 0.5) / 12.0, 0.5), 0.0).rgb;
+}
+
+/* 每个模式给树体一个 "亮度场"：0 = 暗，1+ = 高光 */
+float treeLum(float h, float ang, float ph, int mode){
+  float L;
+  if (mode == 0) {
+    // 极光：冷绿沿树身斜向流淌
+    float flow = sin(h * 5.0 - u_time * 1.05 + sin(ang * 3.0 + u_time * 0.55) * 1.10);
+    L = 0.54 + 0.33 * flow;
+  } else if (mode == 1) {
+    // 熔金：暖光自底部向上呼吸
+    float w = sin(u_time * 0.72 - h * 2.3);
+    L = 0.52 + 0.40 * w;
+  } else if (mode == 2) {
+    // 赛博：细密扫描带，相位被方位角扭一下，免得成竖直条纹
+    float band = sin(h * 30.0 - u_time * 2.6 + sin(ang * 2.0) * 0.8);
+    L = 0.46 + 0.30 * max(0.0, band) + 0.10 * sin(ang * 2.0 + h * 3.0 + u_time * 1.1);
+  } else if (mode == 3) {
+    // 脉冲：能量波自根部推上树梢
+    float pos = mod(u_time * 0.42, 1.42);
+    float d = (h - pos) / 0.185;
+    L = 0.09 + 0.92 * exp(-d * d) + 0.22 * exp(-max(h - pos, 0.0) * 3.0);
+  } else if (mode == 4) {
+    // 银河：旋臂
+    float arm = sin(h * 4.4 + ang * 1.7 - u_time * 0.42);
+    L = 0.34 + 0.52 * pow(max(0.0, arm), 1.4) + 0.08 * sin(ang * 5.0 - h * 9.0);
+  } else if (mode == 5) {
+    // 烟花：树体压暗一点，让彩色的爆闪跳出来
+    float flick = 0.5 + 0.5 * sin(h * 8.0 - u_time * 1.6 + ang * 1.2);
+    L = 0.34 + 0.40 * flick;
+  } else {
+    // 冰晶：稳定通透的冷光（这档色板本身很亮，L 不能高）
+    L = 0.54 + 0.15 * sin(u_time * 0.55 + h * 3.2);
+  }
+  return L;
+}
+
+void main(){
+  // 互动位移：都在这里改顶点，粒子数据本身不动（静态缓冲一次上传，之后不再碰）
+  vec3 pos = a_pos;
+  float hh = clamp(a_hn, 0.0, 1.0);
+  int   kind = int(a_kind + 0.5);
+
+  // 摇一摇：越高的枝条摆得越大，像真树被晃了一下（根部几乎不动）
+  if (u_shake > 0.001) {
+    pos.x += sin(u_time * 7.4 + hh * 2.6) * u_shake * hh * 0.90;
+    pos.z += cos(u_time * 6.6 + hh * 2.0) * u_shake * hh * 0.62;
+  }
+
+  // 冲击波：从触点高度向上下两侧扩散的光环，把整圈粒子往外推
+  // （球面波在锥体上只擦过一小圈，看不出来；按高度分层才读得懂）
+  float wave = 0.0;
+  if (u_waveT >= 0.0) {
+    float band = abs(pos.y - u_waveO.y) - u_waveT * 3.4;   // 上下两条波前
+    wave = exp(-band * band * 11.0) * exp(-u_waveT * 1.15);
+    // 外推：同一高度的整圈一起鼓出去，肉眼才看得出"波"
+    vec2 dir = normalize(pos.xz + vec2(1e-4));
+    pos.xz += dir * (wave * 0.26);
+    pos.y += wave * 0.07;                                  // 顺带抬一点，像被顶了一下
+  }
+
+  /* ---- 入场：从树底往上逐层生长 ---- */
+  // 还没点亮的那一层先从树轴缩着、略微下沉，显形时弹回原位 ——
+  // 这样树是「长出来」的，不是「淡进来」的
+  float rvMask = 1.0;   // 亮度门
+  float rvScan = 0.0;   // 正在显形的那一层额外发亮（扫描光带）
+  if (u_reveal < 1.19) {
+    if (kind <= 3 || kind == 7) {
+      // 用真实世界高度算，而不是 a_hn：高度是物理量，和屏幕上"从下往上"严格对应
+      float hy = clamp((a_pos.y + 3.05) / 6.10, 0.0, 1.0);
+      float d  = u_reveal - hy * 0.98;
+      float rv = smoothstep(-0.030, 0.022, d);   // 边界要利落：像扫描线切过去，不是一团渐变
+      pos.y  += (1.0 - rv) * 0.10;               // 未显形的层略微下沉，显形时顶上来
+      rvMask  = rv;
+      // 亮带必须窄：系数给大了，整截没长出来的树都会被"顺带"照亮
+      rvScan  = exp(-d * d * 420.0);
+    } else {
+      // 雪、背景星、烟花不参与高度分层，统一压后浮现
+      rvMask = smoothstep(-0.02, 0.24, u_reveal);
+    }
+  }
+
+  vec4 vp = u_vp * vec4(pos, 1.0);
+  gl_Position = vp;
+
+  float depth = max(0.06, vp.w);
+  float px = a_size * (u_focal / depth) * u_sizeK;
+  // 远处小于 1px 的粒子会闪烁，直接丢弃（但保留极弱背景星）
+  if (px < 0.85 && a_kind > 5.5) { /* 背景星允许 */ }
+  gl_PointSize = clamp(px, 1.0, 140.0);
+
+  float ang  = atan(a_pos.z, a_pos.x);
+  float t    = u_time;
+  float gain = a_gain;
+  // 正对相机的粒子亮、背面暗 —— 树才有体积而不是剪影
+  float facing = dot(normalize(a_pos.xz + vec2(1e-4)), u_viewDir);
+  float depthTone = 0.62 + 0.46 * facing;   // 背面对比拉大，树才有厚度
+  vec3  col;
+  float si;
+
+  if (kind == 0 || kind == 7) {
+    /* 针叶 / 树干 */
+    float L = treeLum(a_hn, ang, a_phase, u_mode) * (kind == 7 ? 0.55 : 1.0);
+    L = clamp(L, 0.0, 1.35);
+    si = min(5.0, floor(L * 5.4));
+    gain *= 0.86 + 0.26 * min(L, 1.0);
+
+    gain *= depthTone;
+    gain += 0.22 * smoothstep(0.76, 1.05, a_rn) * (0.55 + 0.45 * depthTone);
+    if (u_mode == 2) {
+      // 赛博：按方位角劈成洋红 / 青两半。相位随高度摆动，
+      // 分界才不是一条笔直的竖线，而像被撕开的裂缝
+      float az = fract(ang * 0.1591549 + 0.16 + 0.085 * sin(a_hn * 5.5 + u_time * 0.6));
+      if (az < 0.38) si = 7.0;
+      else if (az > 0.70) si = 8.0;
+    } else if (u_mode == 5) {
+      // 烟花：树上零星彩点
+      float sp = sin(a_phase * 5.0 + t * 2.4);
+      if (sp > 0.935) { si = 7.0 + floor(fract(a_phase * 7.3) * 3.0); gain *= 2.2; }
+    } else if (u_mode == 4) {
+      // 银河：旋臂上偏紫
+      if (fract(ang * 0.3183 + a_hn * 0.7 + 0.2) < 0.22) si = 9.0;
+    }
+    col = pal(si);
+
+  } else if (kind == 1) {
+    /* 螺旋灯带 */
+    float fl = 0.62 + 0.46 * sin(t * 2.6 + a_phase * 6.2831);
+    si = 6.0 + floor(fract(a_phase * 3.7) * 2.0) * 1.0;
+    col = pal(a_slot > 7.5 ? 8.0 : 6.0);
+    gain *= fl * 0.80;
+
+  } else if (kind == 2) {
+    /* 顶部星芒 */
+    float pulse = 0.84 + 0.28 * sin(t * 1.65);
+    si = (a_rn > 0.80) ? 6.0 : 10.0;
+    col = pal(si);
+    gain *= pulse * u_gl;
+
+  } else if (kind == 3) {
+    /* 地面光池 / 倒影 */
+    col = pal(a_slot);
+    gain *= 0.90 + 0.20 * sin(t * 0.9 + a_phase * 3.0);
+
+  } else if (kind == 4) {
+    /* 飘雪 */
+    col = pal(10.0);
+    gain *= 0.94;
+
+  } else if (kind == 5) {
+    /* 背景星野 */
+    float tw = 0.72 + 0.40 * sin(t * (1.2 + a_phase * 2.2) + a_phase * 40.0);
+    col = pal(10.0);
+    gain *= tw;
+
+  } else {
+    /* 烟花火花 */
+    col = pal(a_slot);
+  }
+
+  // 波前经过时提亮，才看得见那圈光在走
+  gain *= 1.0 + 4.2 * wave;
+
+  // 双击点亮：整棵树一起提亮，再迅速回落，像被闪光灯扫了一下
+  gain *= 1.0 + u_flash * 2.8;
+
+  // 入场：未显形的层直接压掉，正在显形的那一层加一道亮带
+  if (u_reveal < 1.19) {
+    gain = gain * rvMask + rvScan * 1.15;
+  }
+
+  v_col = col * gain;
+  v_bright = clamp(gain, 0.0, 2.0);
+}
+`;
+
+const FS_PARTICLE = `
+precision mediump float;
+varying vec3  v_col;
+varying float v_bright;
+void main(){
+  vec2 d = gl_PointCoord * 2.0 - 1.0;
+  float r2 = dot(d, d);
+  if (r2 > 1.0) discard;
+  // 小而亮的核心 + 一圈弱光晕。
+  // 衰减一定要陡：早先 exp(-r2*3.4) 那种柔和法，单个点就晕成一小团，
+  // 密集叠加后整棵树糊成一片雾；收陡之后才是「星点」而不是「雾团」。
+  float core = exp(-r2 * 6.2);
+  float halo = exp(-r2 * 2.4) * 0.32;
+  float a = min(1.0, core + halo);
+  a *= 1.0 - smoothstep(0.55, 1.0, r2);   // 圆形收边，去掉方角
+  gl_FragColor = vec4(v_col * a * 0.92, 1.0);
+}
+`;
+
+/* ---------- 全屏 pass ---------- */
+const VS_QUAD = `
+precision highp float;
+attribute vec2 a_p;
+varying vec2 v_uv;
+void main(){ v_uv = a_p * 0.5 + 0.5; gl_Position = vec4(a_p, 0.0, 1.0); }
+`;
+
+const FS_BRIGHT = `
+precision mediump float;
+varying vec2 v_uv;
+uniform sampler2D u_tex;
+uniform vec2  u_texel;
+uniform float u_thresh;
+uniform float u_power;
+void main(){
+  // 4-tap 盒式降采样，降采样本身就带来一半的模糊
+  vec3 c = texture2D(u_tex, v_uv + u_texel * vec2(-0.5,-0.5)).rgb;
+  c += texture2D(u_tex, v_uv + u_texel * vec2( 0.5,-0.5)).rgb;
+  c += texture2D(u_tex, v_uv + u_texel * vec2(-0.5, 0.5)).rgb;
+  c += texture2D(u_tex, v_uv + u_texel * vec2( 0.5, 0.5)).rgb;
+  c *= 0.25;
+  c = max(c - u_thresh, 0.0) * u_power;
+  gl_FragColor = vec4(c, 1.0);
+}
+`;
+
+const FS_BLUR = `
+precision mediump float;
+varying vec2 v_uv;
+uniform sampler2D u_tex;
+uniform vec2 u_dir;
+void main(){
+  // 9-tap 高斯（权重归一化）
+  vec3 c = texture2D(u_tex, v_uv).rgb * 0.227027;
+  c += texture2D(u_tex, v_uv + u_dir * 1.3846).rgb * 0.316216;
+  c += texture2D(u_tex, v_uv - u_dir * 1.3846).rgb * 0.316216;
+  c += texture2D(u_tex, v_uv + u_dir * 3.2308).rgb * 0.070270;
+  c += texture2D(u_tex, v_uv - u_dir * 3.2308).rgb * 0.070270;
+  gl_FragColor = vec4(c, 1.0);
+}
+`;
+
+const FS_COMPOSITE = `
+precision mediump float;
+varying vec2 v_uv;
+uniform sampler2D u_scene;
+uniform sampler2D u_b1;
+uniform sampler2D u_b2;
+uniform vec2  u_res;
+uniform float u_b1k;
+uniform float u_b2k;
+uniform float u_expo;
+
+void main(){
+  vec3 c = texture2D(u_scene, v_uv).rgb;
+  c += texture2D(u_b1, v_uv).rgb * u_b1k;
+  c += texture2D(u_b2, v_uv).rgb * u_b2k;
+
+  // 深空径向渐变
+  float asp = u_res.x / max(u_res.y, 1.0);
+  vec2 p = (v_uv - vec2(0.5, 0.50)) * vec2(asp, 1.0);
+  float d = length(p);
+  vec3 bg = mix(vec3(0.014, 0.026, 0.046), vec3(0.0020, 0.0038, 0.0090),
+                smoothstep(0.02, 0.85, d));
+  c += bg;
+
+  // 色调映射：保色的指数映射，过曝处才收白
+  c *= u_expo;
+  c = vec3(1.0) - exp(-c * 1.16);
+
+  // 回补饱和度：上一步会把亮部洗向白色，拉回来颜色才"鲜明"而不是一片灰白
+  float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c = mix(vec3(lum), c, 1.27);
+
+  // 暗角
+  float vig = smoothstep(1.28, 0.30, d * 1.12);
+  c *= 0.58 + 0.42 * vig;
+
+  // 抖动，消除暗部色带
+  float n = fract(sin(dot(v_uv * u_res, vec2(12.9898, 78.233))) * 43758.5453);
+  c += (n - 0.5) * (1.0 / 255.0);
+
+  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+}
+`;
+
+const progP = program(VS_PARTICLE, FS_PARTICLE);
+const progBright = program(VS_QUAD, FS_BRIGHT);
+const progBlur = program(VS_QUAD, FS_BLUR);
+const progComp = program(VS_QUAD, FS_COMPOSITE);
+
+/* ---------- 全屏 quad ---------- */
+const quadBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+gl.bufferData(gl.ARRAY_BUFFER,
+  new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
+
+/* ---------- 渲染目标 ---------- */
+function makeTarget(w, h, float) {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  if (float && isGL2) {
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+  } else {
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  }
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  if (!ok && float) return makeTarget(w, h, false);
+  return { tex, fbo, w, h, float };
+}
+
+/* ---------- 调色板纹理 ---------- */
+const PALETTE = (() => {
+  const raw = [
+    [[10,30,27],[14,52,44],[20,88,72],[28,128,104],[44,176,136],[76,226,176],[255,206,122],[150,236,255],[108,200,255],[188,142,255],[255,255,245],[168,255,226]],
+    [[34,20,6],[66,38,10],[104,60,14],[150,92,22],[204,134,38],[255,184,74],[255,210,130],[255,150,52],[255,236,190],[255,120,40],[255,250,230],[255,206,140]],
+    [[8,16,30],[14,34,62],[18,62,104],[24,104,158],[40,172,214],[96,236,255],[255,62,168],[255,108,210],[120,236,255],[176,96,255],[255,255,255],[128,232,255]],
+    [[10,20,34],[16,40,68],[22,70,112],[32,116,168],[60,180,226],[140,232,255],[214,244,255],[168,214,255],[120,190,255],[196,168,255],[255,255,255],[200,240,255]],
+    [[18,10,38],[36,20,72],[58,32,112],[86,50,156],[128,84,204],[186,142,255],[255,190,236],[180,208,255],[140,176,255],[255,150,214],[255,255,255],[222,200,255]],
+    [[10,26,18],[16,50,32],[24,82,52],[34,120,76],[52,168,108],[92,220,150],[255,226,150],[255,120,120],[120,210,255],[255,150,240],[255,255,255],[200,255,210]],
+    [[12,22,36],[20,40,62],[30,66,96],[46,104,140],[74,156,196],[132,214,244],[255,246,220],[204,240,255],[160,220,255],[176,200,255],[255,255,255],[226,248,255]],
+  ];
+  return raw.map(p => {
+    const u = new Uint8Array(12 * 4);
+    p.forEach((c, i) => { u[i*4] = c[0]; u[i*4+1] = c[1]; u[i*4+2] = c[2]; u[i*4+3] = 255; });
+    return u;
+  });
+})();
+
+const palTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, palTex);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 12, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, PALETTE[0]);
+
+/* 换模式时不是硬切色板，而是 0.65s 插值过去。
+   palMix 就是当前上传到纹理的那一版，切模式时从它出发，
+   所以连点也不会跳变 */
+const palMix = new Uint8Array(PALETTE[0]);
+let palFrom = new Uint8Array(PALETTE[0]);
+let palTo = PALETTE[0];
+let palT = 1;
+
+function startPalette(i) {
+  palFrom = new Uint8Array(palMix);
+  palTo = PALETTE[i];
+  palT = 0;
+}
+function stepPalette(dt) {
+  if (palT >= 1) return;
+  palT = Math.min(1, palT + dt / 0.65);
+  const k = palT * palT * (3 - 2 * palT);
+  for (let j = 0; j < 48; j++) palMix[j] = palFrom[j] + (palTo[j] - palFrom[j]) * k;
+  gl.bindTexture(gl.TEXTURE_2D, palTex);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 12, 1, gl.RGBA, gl.UNSIGNED_BYTE, palMix);
+}
+
+/* ============================================================
+   4. 模式定义
+   ============================================================ */
+
+const MODES = [
+  { cn: '极光', en: 'AURORA',    desc: '冷绿极光沿树身缓慢流淌',  gl: 1.00, bloom: 1.00, expo: 1.00 },
+  { cn: '熔金', en: 'MOLTEN GOLD',desc: '琥珀熔金，暖光自底部向上呼吸', gl: 1.08, bloom: 1.14, expo: 1.04 },
+  { cn: '赛博', en: 'CYBER NEON',desc: '霓虹扫描线，树体劈作青与洋红', gl: 1.16, bloom: 1.20, expo: 1.00 },
+  { cn: '脉冲', en: 'ENERGY PULSE',desc: '能量波自根部推上树梢',   gl: 1.00, bloom: 1.06, expo: 1.02 },
+  { cn: '银河', en: 'GALAXY SPIRAL',desc: '星云旋臂缓缓转动',      gl: 1.04, bloom: 1.22, expo: 1.00 },
+  { cn: '烟花', en: 'FIREWORK',  desc: '不定时爆开的彩色礼花',    gl: 1.02, bloom: 1.18, expo: 1.00 },
+  { cn: '冰晶', en: 'CRYSTAL ICE',desc: '极地冰晶，稳定通透的冷光', gl: 0.96, bloom: 1.00, expo: 0.98 },
+];
+
+/* ============================================================
+   4.5 声音：星光圆舞曲 / 科技语音 / 轻音效
+   全部用 WebAudio 现场合成 —— 单文件、不加载音频资源、断网可用
+   音乐：3/4 拍八音盒，C 大调 16 小节循环，低音 / 和弦垫 / 旋律三层
+        想要换成自己的曲子：在地址后加 ?bgm=./music.mp3 即可，合成音乐会让位
+   语音：speechSynthesis + 玻璃确认音
+   ============================================================ */
+const AU = (function () {
+  const BPM  = 88;
+  const BEAT = 60 / BPM;      // 一拍
+  const STEP = BEAT / 2;      // 一个八分音符
+  const SPB  = 6;             // 每小节 6 个八分音符（3/4 拍）
+
+  const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
+  /* ---------- 和弦表：低音根音 / 和弦垫四声 / 轻伴奏四声 ---------- */
+  const CH = {
+    C:  { bass: 48, pad: [48, 52, 55, 59], acc: [64, 67, 71, 76] },  // Cmaj7
+    Am: { bass: 45, pad: [45, 48, 52, 55], acc: [60, 64, 67, 72] },  // Am7
+    F:  { bass: 41, pad: [41, 45, 48, 52], acc: [57, 60, 64, 69] },  // Fmaj7
+    G:  { bass: 43, pad: [43, 47, 50, 57], acc: [59, 62, 67, 71] }   // Gadd9
+  };
+
+  /* ---------- 16 小节进行 ---------- */
+  const PROG = ['C','C','Am','Am','F','F','G','C',
+                'C','C','Am','Am','F','F','G','C'];
+
+  /* ---------- 旋律：[小节, 八分位置, MIDI, 时值(八分)] ---------- */
+  const MEL = [
+    /* A 段 */
+    [0,0,76,2],[0,2,79,1],[0,3,81,1],[0,4,84,2],
+    [1,0,79,3],[1,3,76,3],
+    [2,0,72,2],[2,2,76,1],[2,3,79,1],[2,4,81,2],
+    [3,0,74,3],[3,3,72,3],
+    [4,0,77,2],[4,2,81,1],[4,3,84,1],[4,4,81,2],
+    [5,0,79,3],[5,3,77,3],
+    [6,0,79,1],[6,1,83,1],[6,2,86,2],[6,4,84,1],[6,5,83,1],
+    [7,0,84,4],[7,4,76,2],
+    /* B 段：抬高的变奏 */
+    [8,0,84,2],[8,2,83,1],[8,3,81,1],[8,4,79,2],
+    [9,0,76,3],[9,3,79,3],
+    [10,0,81,2],[10,2,79,1],[10,3,76,1],[10,4,72,2],
+    [11,0,74,2],[11,2,76,2],[11,4,79,2],
+    [12,0,84,2],[12,2,81,1],[12,3,77,1],[12,4,81,2],
+    [13,0,79,3],[13,3,74,3],
+    [14,0,83,1],[14,1,86,1],[14,2,88,2],[14,4,86,1],[14,5,83,1],
+    [15,0,84,6]
+  ];
+
+  // 预先摊成二维网格，播放时 O(1) 查表
+  const MELG = [];
+  for (let b = 0; b < PROG.length; b++) MELG.push(new Array(SPB).fill(null));
+  for (let i = 0; i < MEL.length; i++) MELG[MEL[i][0]][MEL[i][1]] = [MEL[i][2], MEL[i][3]];
+
+  /* 七种模式各自移调 + 明暗，切模式时整首曲子一起走 */
+  const MODE_TRANS = [0, -2, 3, 5, 7, 2, 7];
+  const MODE_TONE  = [0.55, 0.30, 0.62, 0.70, 0.85, 0.45, 1.00];
+
+  let nbCtx = null, nbBuf = null;
+  function noiseBuffer(ctx) {
+    if (nbCtx === ctx && nbBuf) return nbBuf;
+    const n = Math.floor(ctx.sampleRate * 2);
+    const b = ctx.createBuffer(1, n, ctx.sampleRate);
+    const d = b.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < n; i++) {
+      const w = Math.random() * 2 - 1;
+      last = (last + 0.02 * w) / 1.02;   // 偏棕噪声，比白噪声柔
+      d[i] = last * 3.2;
+    }
+    nbCtx = ctx; nbBuf = b;
+    return b;
+  }
+
+  /* ---------- 音色：八音盒 ----------
+     基音 + 二次泛音 + 一点点三次，起音极快、尾巴很长。
+     泛音只给到 3 倍，再高就会"发刺"—— 这是老音效听起来扎人的根源。 */
+  function voiceBell(ctx, dest, t, midi, dur, lvl, pan, bright) {
+    const f = hz(midi);
+    const b = bright || 0;
+
+    // 三条泛音各自独立包络，并联汇到 out —— 串到主包络上会被乘两次，泛音就没了
+    const out = ctx.createGain();
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(lvl, t + 0.009);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const o1 = ctx.createOscillator();
+    o1.type = 'sine'; o1.frequency.value = f;
+    o1.connect(g); g.connect(out);
+    o1.start(t); o1.stop(t + dur + 0.05);
+
+    const o2 = ctx.createOscillator();
+    o2.type = 'sine'; o2.frequency.value = f * 2.003;
+    const g2 = ctx.createGain();
+    g2.gain.setValueAtTime(0.0001, t);
+    g2.gain.linearRampToValueAtTime(lvl * (0.20 + 0.16 * b), t + 0.007);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.55);
+    o2.connect(g2); g2.connect(out);
+    o2.start(t); o2.stop(t + dur * 0.55 + 0.05);
+
+    // 三次泛音只留一个很短的"叮"，金属感就靠这一下
+    const d3 = Math.min(0.40, dur * 0.30);
+    const o3 = ctx.createOscillator();
+    o3.type = 'sine'; o3.frequency.value = f * 3.008;
+    const g3 = ctx.createGain();
+    g3.gain.setValueAtTime(0.0001, t);
+    g3.gain.linearRampToValueAtTime(lvl * (0.06 + 0.10 * b), t + 0.005);
+    g3.gain.exponentialRampToValueAtTime(0.0001, t + d3);
+    o3.connect(g3); g3.connect(out);
+    o3.start(t); o3.stop(t + d3 + 0.04);
+
+    if (ctx.createStereoPanner && pan) {
+      const p = ctx.createStereoPanner();
+      p.pan.value = Math.max(-0.9, Math.min(0.9, pan));
+      out.connect(p); p.connect(dest);
+    } else {
+      out.connect(dest);
+    }
+  }
+
+  /* ---------- 音色：低音 ----------
+     纯正弦 + 高八度弱层：小喇叭放不出 60Hz，没有八度层就等于没低音 */
+  function voiceBass(ctx, dest, t, midi, dur, lvl) {
+    const f = hz(midi);
+    const o = ctx.createOscillator();
+    o.type = 'sine'; o.frequency.value = f;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(lvl, t + 0.035);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(dest);
+    o.start(t); o.stop(t + dur + 0.05);
+
+    const o2 = ctx.createOscillator();
+    o2.type = 'triangle'; o2.frequency.value = f * 2;
+    const g2 = ctx.createGain();
+    g2.gain.setValueAtTime(0.0001, t);
+    g2.gain.linearRampToValueAtTime(lvl * 0.26, t + 0.045);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.85);
+    o2.connect(g2); g2.connect(dest);
+    o2.start(t); o2.stop(t + dur + 0.05);
+  }
+
+  /* ---------- 引擎：一套完整的合成器，可在线也可离线（用于电平核验） ---------- */
+  function createEngine(ctx, dest) {
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -16; comp.knee.value = 24;
+    comp.ratio.value = 2.6; comp.attack.value = 0.008; comp.release.value = 0.4;
+    comp.connect(dest);
+
+    const master = ctx.createGain();
+    master.gain.value = 0.9;
+    master.connect(comp);
+
+    const music = ctx.createGain();
+    music.gain.value = 0.0001;
+    music.connect(master);
+
+    const sfx = ctx.createGain();
+    sfx.gain.value = 0.85;
+    sfx.connect(master);
+
+    // 和弦垫走低通，旋律不进低通 —— 八音盒的高频是它好听的地方
+    const padLP = ctx.createBiquadFilter();
+    padLP.type = 'lowpass'; padLP.frequency.value = 1180; padLP.Q.value = 0.5;
+    padLP.connect(music);
+    const padBus = ctx.createGain();
+    padBus.gain.value = 1;
+    padBus.connect(padLP);
+
+    const lfo = ctx.createOscillator();
+    const lfoG = ctx.createGain();
+    lfo.frequency.value = 0.05; lfoG.gain.value = 220;
+    lfo.connect(lfoG); lfoG.connect(padLP.frequency);
+    lfo.start();
+
+    const nb = noiseBuffer(ctx);
+
+    // 极轻的风，把"静音的死"填掉
+    const ns = ctx.createBufferSource();
+    ns.buffer = nb; ns.loop = true;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 640; bp.Q.value = 0.6;
+    const ng = ctx.createGain(); ng.gain.value = 0.018;
+    ns.connect(bp); bp.connect(ng); ng.connect(music);
+    ns.start();
+
+    // 四个常驻 pad 声部：每小节换和声，滑过去而不是硬切
+    const pad = [];
+    for (let i = 0; i < 4; i++) {
+      const lvl = i === 0 ? 0.078 : 0.044 / Math.sqrt(i);
+      const g = ctx.createGain();
+      g.gain.value = 0.0001;
+      g.connect(padBus);
+      const o1 = ctx.createOscillator(); o1.type = 'sine';
+      const o2 = ctx.createOscillator(); o2.type = 'triangle';
+      const det = ctx.createGain(); det.gain.value = 0.30;
+      o1.connect(g); o2.connect(det); det.connect(g);
+      o1.start(); o2.start();
+      g.gain.setTargetAtTime(lvl, ctx.currentTime, 1.6);
+      pad.push({ g: g, o1: o1, o2: o2 });
+    }
+
+    let stepPos = 0, nextT = 0, curTrans = 0;
+
+    const E = {
+      ctx: ctx, master: master, music: music, sfx: sfx, noise: nb,
+      trans: 0, tone: 0.55,
+      get nextT() { return nextT; },
+      get bar() { return Math.floor(stepPos / SPB) % PROG.length; },
+      start(t0) { stepPos = 0; nextT = t0 || ctx.currentTime; },
+      /* 落后太多就重排到下一个整小节，避免一次补几百拍 */
+      resync(t0) {
+        const t = t0 || ctx.currentTime;
+        const bar = Math.ceil(stepPos / SPB) * SPB;
+        stepPos = bar; nextT = t;
+      },
+      scheduleUntil(tEnd) {
+        let guard = 0;
+        while (nextT < tEnd && guard++ < 4000) {
+          const s = stepPos % SPB;
+          const bar = Math.floor(stepPos / SPB) % PROG.length;
+
+          if (s === 0) {
+            curTrans = E.trans;                // 移调只在换小节时生效，不会串调
+            const ch = CH[PROG[bar]] || CH.C;
+            voiceBass(ctx, music, nextT, ch.bass + curTrans, BEAT * 1.85, 0.062);
+            for (let k = 0; k < 2; k++) {
+              for (let j = 0; j < 4; j++) {
+                const n = ch.acc[j] + curTrans;
+                voiceBell(ctx, music, nextT + STEP * (2 + k * 2) + j * 0.014,
+                          n, BEAT * 0.95, k ? 0.048 : 0.058, (j - 1.5) * 0.30, 0.55);
+              }
+            }
+            for (let i = 0; i < 4; i++) {
+              const f = hz(ch.pad[i] + curTrans);
+              pad[i].o1.frequency.setTargetAtTime(f, nextT, 0.20);
+              pad[i].o2.frequency.setTargetAtTime(f * 1.004, nextT, 0.20);
+            }
+          }
+
+          const note = MELG[bar][s];
+          if (note) {
+            voiceBell(ctx, music, nextT, note[0] + curTrans,
+                      note[1] * STEP * 1.8, 0.340, 0, E.tone);
+          }
+
+          stepPos++; nextT += STEP;
+        }
+      }
+    };
+    return E;
+  }
+
+  /* ---------- 音效（统一换成一族"玻璃 / 八音盒"，没有方波和次低频） ---------- */
+  function playSfx(ctx, dest, name, x, noise) {
+    const t = ctx.currentTime;
+
+    if (name === 'ping') {
+      const pan = x == null ? 0 : (x / Math.max(1, window.innerWidth)) * 2 - 1;
+      voiceBell(ctx, dest, t, 88, 1.10, 0.150, pan, 0.5);          // E6
+      voiceBell(ctx, dest, t + 0.012, 95, 0.80, 0.070, pan, 0.7);  // B6，五度
+    } else if (name === 'ok') {
+      voiceBell(ctx, dest, t, 88, 0.85, 0.120, 0, 0.4);
+      voiceBell(ctx, dest, t + 0.10, 93, 0.95, 0.105, 0, 0.5);     // A6
+    } else if (name === 'nope') {
+      voiceBell(ctx, dest, t, 67, 0.42, 0.110, 0, 0.1);            // G4，软软地落一下
+      voiceBell(ctx, dest, t + 0.09, 64, 0.40, 0.085, 0, 0.1);
+    } else if (name === 'flash') {
+      const arp = [84, 88, 91, 96];
+      for (let i = 0; i < 4; i++) {
+        voiceBell(ctx, dest, t + i * 0.045, arp[i], 1.4, 0.115, (i - 1.5) * 0.35, 0.8);
+      }
+    } else if (name === 'chime') {
+      const arp = [96, 100, 103];
+      for (let i = 0; i < 3; i++) {
+        voiceBell(ctx, dest, t + i * 0.07, arp[i], 1.6, 0.095, (i - 1) * 0.4, 1);
+      }
+    } else if (name === 'boom') {
+      // 一团"开"出来的气，不再是往 40Hz 砸的闷雷
+      const src = ctx.createBufferSource();
+      src.buffer = noise || noiseBuffer(ctx);
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(1150, t);
+      lp.frequency.exponentialRampToValueAtTime(240, t + 1.05);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.34, t + 0.13);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.45);
+      src.connect(lp); lp.connect(g); g.connect(dest);
+      src.start(t); src.stop(t + 1.5);
+
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(96, t);
+      o.frequency.exponentialRampToValueAtTime(72, t + 0.55);
+      const og = ctx.createGain();
+      og.gain.setValueAtTime(0.0001, t);
+      og.gain.linearRampToValueAtTime(0.115, t + 0.06);
+      og.gain.exponentialRampToValueAtTime(0.0001, t + 0.75);
+      o.connect(og); og.connect(dest);
+      o.start(t); o.stop(t + 0.8);
+    } else if (name === 'whoosh') {
+      const src = ctx.createBufferSource();
+      src.buffer = noise || noiseBuffer(ctx);
+      const bpf = ctx.createBiquadFilter();
+      bpf.type = 'bandpass'; bpf.Q.value = 0.85;
+      bpf.frequency.setValueAtTime(420, t);
+      bpf.frequency.exponentialRampToValueAtTime(1750, t + 0.55);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.55, t + 0.14);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.68);
+      src.connect(bpf); bpf.connect(g); g.connect(dest);
+      src.start(t); src.stop(t + 0.72);
+    } else if (name === 'thump') {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(132, t);
+      o.frequency.exponentialRampToValueAtTime(96, t + 0.18);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.135, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+      o.connect(g); g.connect(dest);
+      o.start(t); o.stop(t + 0.3);
+    }
+  }
+
+  /* ============================================================
+     在线实例
+     ============================================================ */
+  const S = {
+    ctx: null, eng: null,
+    on: true, ready: false, level: 1.15,
+    trans: 0, tone: 0.55,
+    ducking: false, duckTimer: 0, bellTimer: 0, bellGen: 0,
+    schedTimer: 0,
+    /* 外挂曲（打包自带 bgm.m4a，或 ?bgm= 指过来的文件） */
+    bgmEl: null, bgmNode: null, bgmGain: null, pendingBgm: null, bgmOn: false,
+    mainUrl: '', bgmVol: 0.72,
+    /* 合成音乐只负责开场：introUntil 是它在 ctx 时间轴上的收尾时刻 */
+    introUntil: 0, introDone: false, introLen: 0,
+    deferred: false, started: false
+  };
+
+  let zhVoice = null;
+  function pickVoice() {
+    if (!('speechSynthesis' in window)) return null;
+    let vs = [];
+    try { vs = speechSynthesis.getVoices() || []; } catch (_) { return null; }
+    if (!vs.length) return null;
+    if (zhVoice && vs.indexOf(zhVoice) >= 0) return zhVoice;
+    const prefer = ['Tingting', '婷婷', 'Yaoyao', 'Huihui', 'Xiaoxiao', 'Kangkang', 'Google 普通话'];
+    for (let i = 0; i < prefer.length; i++) {
+      const v = vs.filter((x) => x.name && x.name.indexOf(prefer[i]) >= 0)[0];
+      if (v) { zhVoice = v; return v; }
+    }
+    zhVoice = vs.filter((x) => /^zh/i.test(x.lang || ''))[0] || null;
+    return zhVoice;
+  }
+  if ('speechSynthesis' in window) {
+    speechSynthesis.onvoiceschanged = () => { zhVoice = null; pickVoice(); };
+  }
+
+  function build() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return false;
+    S.ctx = new AC();
+    S.eng = createEngine(S.ctx, S.ctx.destination);
+    S.eng.trans = S.trans;      // 入场时如果已经切过模式，音高要跟上
+    S.eng.tone = S.tone;
+    S.ready = true;
+    return true;
+  }
+
+  /* 开场动画还要放多久（秒）。没有开场动画、或已经放过了 → 0，直接上歌。
+     `app` 定义在这个 IIFE 后面，但这里只会在运行时被调到，不存在暂时性死区 */
+  function introSeconds() {
+    try {
+      if (app.bootFade) return 0;
+      if (!app.bootOn) {
+        if ((app.bootK || 0) >= 1) return 0;                       // 入场被跳过 / 已经放完
+        return (app.bootDur || (app.isMobile ? 2.15 : 2.45)) + 0.35; // 还没开始：按默认时长估
+      }
+      const k = Math.max(0, Math.min(1, app.bootK || 0));
+      const dur = app.bootDur || 2.3;
+      return Math.max(0, dur * (1 - k)) + 0.55;
+    } catch (_) { return 0; }
+  }
+
+  /* 起声的总入口：开场那段合成音乐只覆盖入场动画，之后整首歌接上 */
+  function beginMusic() {
+    if (!S.ready || S.started) return;
+    S.started = true; S.deferred = false;
+    S.introLen = introSeconds();
+    if (S.introLen > 0.35) {
+      S.introDone = false;
+      S.introUntil = S.ctx.currentTime + 0.10 + S.introLen;
+      startClock();
+    } else {
+      S.introDone = true;
+      S.introUntil = 0;
+      startMainBgm(1.4);
+    }
+  }
+
+  /* 调度器：每 250ms 往前铺 0.9 秒的谱子。
+     用"往前排"而不是"每拍一个 setTimeout"，节奏才不会被主线程卡歪。
+     现在它只铺到开场动画收尾为止——后半场的音乐交给整首歌。 */
+  function tick() {
+    if (!S.ready || !S.on || S.introDone) return;
+    try {
+      if (S.eng.ctx.state === 'suspended') return;
+      if (S.eng.nextT < S.ctx.currentTime) S.eng.resync(S.ctx.currentTime + 0.06);
+      const end = S.introUntil > 0
+        ? Math.min(S.ctx.currentTime + 0.9, S.introUntil)
+        : S.ctx.currentTime + 0.9;
+      if (end > S.ctx.currentTime) S.eng.scheduleUntil(end);
+      if (S.introUntil > 0 && S.ctx.currentTime >= S.introUntil - 0.05) finishIntro();
+    } catch (_) {}
+  }
+  function startClock() {
+    clearInterval(S.schedTimer);
+    S.eng.start(S.ctx.currentTime + 0.10);
+    S.schedTimer = setInterval(tick, 250);
+    tick();
+  }
+
+  /* 开场的八音盒到此为止：合成谱淡出，把场子交给歌 */
+  function finishIntro() {
+    if (S.introDone) return;
+    S.introDone = true;
+    clearInterval(S.schedTimer); S.schedTimer = 0;
+    if (S.ready && !S.bgmOn) S.eng.music.gain.setTargetAtTime(0.0001, S.ctx.currentTime, 0.45);
+    startMainBgm(2.2);
+  }
+
+  /* 正式开始放歌。已经在放了就只是把音量抬回来 */
+  function startMainBgm(fade) {
+    if (!S.on || !S.mainUrl) return;
+    if (!S.bgmOn) { applyBgm(S.mainUrl, fade); return; }
+    if (S.bgmEl) { const p = S.bgmEl.play(); if (p && p.catch) p.catch(() => {}); }
+    if (S.bgmGain) S.bgmGain.gain.setTargetAtTime(S.bgmVol, S.ctx.currentTime, 0.6);
+  }
+
+  /* 外挂曲没起来（文件缺了、解码失败、被浏览器拦了）：把合成谱接回来，
+     宁可回到老样子也不要变成哑巴 */
+  function resumeSynth() {
+    if (!S.ready) return;
+    S.introDone = false; S.introUntil = 0; S.introLen = 0;
+    S.eng.music.gain.setTargetAtTime(S.on ? S.level : 0.0001, S.ctx.currentTime, 0.5);
+    S.eng.start(S.ctx.currentTime + 0.08);
+    clearInterval(S.schedTimer);
+    S.schedTimer = setInterval(tick, 250);
+    tick();
+  }
+
+  function rampMusic(v, tc) {
+    if (!S.ready) return;
+    S.ducking = false;
+    if (S.bgmOn) {
+      S.eng.music.gain.setTargetAtTime(0.0001, S.ctx.currentTime, 0.3);
+      if (S.bgmGain) S.bgmGain.gain.setTargetAtTime(
+        S.on ? S.bgmVol : 0.0001, S.ctx.currentTime, Math.max(0.25, (tc || 1.6) / 2));
+    } else {
+      S.eng.music.gain.setTargetAtTime(S.on ? v : 0.0001, S.ctx.currentTime, tc || 1.6);
+    }
+  }
+
+  function duck(sec) {
+    if (!S.ready || !S.on) return;
+    if (S.bgmOn && S.bgmGain) S.bgmGain.gain.setTargetAtTime(S.bgmVol * 0.34, S.ctx.currentTime, 0.18);
+    else S.eng.music.gain.setTargetAtTime(S.level * 0.34, S.ctx.currentTime, 0.18);
+    clearTimeout(S.duckTimer);
+    S.duckTimer = setTimeout(() => {
+      if (S.bgmOn && S.bgmGain) S.bgmGain.gain.setTargetAtTime(S.bgmVol, S.ctx.currentTime, 1.0);
+      else S.eng.music.gain.setTargetAtTime(S.level, S.ctx.currentTime, 1.0);
+    }, (sec || 1.6) * 1000);
+  }
+
+  /* 外挂曲：打包自带的 bgm.m4a，或用 ?bgm=./别的文件 指过来。
+     一开声合成音乐就彻底让位；起不来就退回合成谱（见 resumeSynth） */
+  function applyBgm(url, fade) {
+    if (!url || !S.ready || S.bgmOn) return false;
+    try {
+      const el = new Audio();
+      el.src = url;
+      el.loop = true;
+      el.preload = 'auto';
+      el.volume = 1;
+      const node = S.ctx.createMediaElementSource(el);
+      const g = S.ctx.createGain();
+      g.gain.value = 0.0001;                 // 从静音淡进来，别在开场接缝处"啪"一下
+      node.connect(g); g.connect(S.eng.master);
+
+      const fail = () => {
+        if (S.bgmEl !== el) return;          // 已经换过一条了，别误伤
+        S.bgmOn = false; S.bgmEl = null; S.bgmNode = null; S.bgmGain = null;
+        resumeSynth();
+      };
+      el.addEventListener('error', fail);
+
+      S.bgmEl = el; S.bgmNode = node; S.bgmGain = g; S.bgmOn = true;
+
+      const p = el.play();
+      if (p && p.catch) p.catch(fail);
+
+      S.eng.music.gain.setTargetAtTime(0.0001, S.ctx.currentTime, 0.4);
+      g.gain.setTargetAtTime(S.bgmVol, S.ctx.currentTime, Math.max(0.35, (fade || 2.2) / 3.2));
+      return true;
+    } catch (_) { return false; }
+  }
+
+  function unlock() {
+    if (S.ready || !S.on) return false;
+    try { if (!build()) return false; } catch (_) { return false; }
+    const btn = document.getElementById('sndBtn');
+    if (btn) btn.classList.remove('wait');
+    if (S.ctx.state === 'suspended') { try { S.ctx.resume(); } catch (_) {} }
+    rampMusic(S.level, 1.4);
+
+    /* 源曲（合成的那首八音盒）只保留开场动画这一段，剩下的交给整首歌。
+       授权门还没过、入场也还没开始的时候先别出声——否则歌会在动画之前就放掉 */
+    const bootPending = !app.bootOn && !app.bootFade && (app.bootK || 0) < 1;
+    if (window.__gateOpen || bootPending) { S.deferred = true; return true; }
+
+    beginMusic();
+    return true;
+  }
+
+  const api = {
+    get ready() { return S.ready; },
+    get on() { return S.on; },
+    unlock,
+
+    /* 指定主曲：不传就沿用打包自带的那首 */
+    setBgm(url) {
+      S.pendingBgm = url;
+      S.mainUrl = url || '';
+      if (!S.ready || !S.on) return;
+      if (S.introDone) startMainBgm(1.2);
+    },
+
+    /* 入场真的开始了（过完授权门 / 直接进入场）：把刚才压着的起声补上 */
+    beginIfPending() { if (S.deferred && !S.started) beginMusic(); },
+
+    /* 开屏被提前结束（点一下跳过）：合成音乐马上收尾，让歌接上来 */
+    cutIntro() {
+      if (!S.ready || S.introDone) return;
+      const t = S.ctx.currentTime + 0.34;
+      S.introUntil = S.introUntil > 0 ? Math.min(S.introUntil, t) : t;
+    },
+
+    toggle(skipPersist) {
+      S.on = !S.on;
+      if (S.on) {
+        if (!S.ready) unlock();
+        else {
+          if (S.ctx.state === 'suspended') S.ctx.resume();
+          rampMusic(S.level, 1.0);
+          if (S.introDone) startMainBgm(1.0);
+          else { if (!S.schedTimer) startClock(); else tick(); }
+        }
+      } else {
+        if (S.ready) rampMusic(0, 0.5);
+        clearInterval(S.schedTimer); S.schedTimer = 0;
+        clearTimeout(S.bellTimer);
+        if (S.bgmOn && S.bgmEl) { try { S.bgmEl.pause(); } catch (_) {} }
+        if ('speechSynthesis' in window) { try { speechSynthesis.cancel(); } catch (_) {} }
+      }
+      const btn = document.getElementById('sndBtn');
+      if (btn) {
+        btn.classList.toggle('on', S.on);
+        btn.classList.remove('wait');
+        const t = document.getElementById('sndTxt');
+        if (t) t.textContent = S.on ? '声音 开' : '声音 关';
+      }
+      if (!skipPersist) { try { localStorage.setItem('aurora.snd', S.on ? '1' : '0'); } catch (_) {} }
+      return S.on;
+    },
+
+    /* 科技语音：压低声线，前面垫两声玻璃音，才像系统在说话 */
+    say(text, opts) {
+      if (!S.on || !S.ready) return;
+      const o = opts || {};
+      if (o.beep !== false) {
+        voiceBell(S.ctx, S.eng.sfx, S.ctx.currentTime, 91, 0.55, 0.070, 0, 0.6);
+        setTimeout(() => voiceBell(S.ctx, S.eng.sfx, S.ctx.currentTime, 96, 0.50, 0.060, 0, 0.6), 95);
+      }
+      if (!('speechSynthesis' in window)) return;
+      try {
+        const u = new SpeechSynthesisUtterance(text);
+        const v = pickVoice(); if (v) u.voice = v;
+        u.lang = 'zh-CN';
+        u.rate = o.rate || 1.05;
+        u.pitch = o.pitch || 0.80;
+        u.volume = 1.0;
+        speechSynthesis.cancel();
+        setTimeout(() => { try { speechSynthesis.speak(u); } catch (_) {} }, 60);
+        duck(1.2 + text.length * 0.13);
+      } catch (_) {}
+    },
+
+    /* 切模式：整首曲子移调 + 明暗变化，换小节时才落下去 */
+    setMode(i, quiet) {
+      const k = i % MODE_TRANS.length;
+      S.trans = MODE_TRANS[k];
+      S.tone = MODE_TONE[k];
+      if (!S.ready || !S.eng) return;
+      S.eng.trans = S.trans;
+      S.eng.tone = S.tone;
+      if (!quiet) api.sfx('whoosh');
+    },
+
+    setLevel(v) { S.level = v; rampMusic(S.level, 2.2); },
+
+    setOn(v, skipPersist) {
+      if (S.on === v) return S.on;
+      return api.toggle(skipPersist);
+    },
+
+    sfx(name, x) {
+      if (!S.ready || !S.on) return;
+      try { playSfx(S.ctx, S.eng.sfx, name, x, S.eng.noise); } catch (_) {}
+    },
+
+    /* 调试/自检用：给外面一套离线引擎，便于渲染出来量电平 */
+    _engine: createEngine,
+    _dbg() {
+      return { ready: S.ready, on: S.on, level: S.level, bgmOn: S.bgmOn,
+               clock: S.schedTimer ? 1 : 0, trans: S.trans, tone: S.tone,
+               state: S.ctx ? S.ctx.state : 'none',
+               main: S.mainUrl, introLen: +S.introLen.toFixed(2),
+               introDone: S.introDone, bgmVol: S.bgmVol,
+               bgmTime: S.bgmEl ? +S.bgmEl.currentTime.toFixed(2) : 0,
+               bgmErr: S.bgmEl ? !!S.bgmEl.error : null,
+               gainSynth: (S.eng && S.eng.music) ? +S.eng.music.gain.value.toFixed(3) : -1,
+               gainBgm: S.bgmGain ? +S.bgmGain.gain.value.toFixed(3) : -1 };
+    },
+    _sfx: playSfx,
+    _song: { BPM, BEAT, STEP, SPB, PROG, MEL, CH, MODE_TRANS }
+  };
+
+  document.addEventListener('visibilitychange', () => {
+    if (!S.ready) return;
+    try {
+      if (document.hidden) {
+        S.ctx.suspend();
+        if (S.bgmOn && S.bgmEl) S.bgmEl.pause();
+      } else if (S.on) {
+        S.ctx.resume();
+        if (S.introDone) startMainBgm(0.8);
+        else if (!S.schedTimer) startClock();
+        else tick();
+      }
+    } catch (_) {}
+  });
+
+  return api;
+})();
+
+/* ============================================================
+   5. 应用
+   ============================================================ */
+
+const app = {
+  w: 1, h: 1, dpr: 1,
+  yaw: 0.42, pitch: 0.105, dist: 14.6, distT: 14.6,
+  vYaw: 0, vPitch: 0,
+  mode: 0, modeT: 0,          // modeT 用于调色板/泛光参数的平滑过渡
+  t: 0,
+  cycle: false, cycleT: 0,
+  auto: 0,
+  hud: true,
+  quality: 1,
+  isMobile: false,
+  pxBudget: 3.0e6,   // 渲染像素预算，移动端会自动压低
+  pxScale: 1,        // 自适应降档系数（持续掉帧时下调）
+  waveT: -1,         // 冲击波计时，< 0 表示没有
+  waveO: [0, 0, 0],  // 冲击波原点（世界坐标）
+  shake: 0,          // 摇一摇摆幅，指数衰减
+  flash: 0,          // 双击点亮：0→1 的闪光强度
+  flashLock: false,  // 调试：把闪光定格在某值
+  fwCount: 0,        // 放了几朵烟花（调试用）
+  taps: 0,           // 触发了几次涟漪（调试用）
+  bootT: 0,          // 入场计时（秒）
+  bootDur: 2.30,     // 入场总时长
+  bootOn: false,     // 入场进行中
+  bootK: 0,          // 入场总进度 0→1
+  bootZoom: 1,       // 相机距离乘数：入场时 > 1，收拢到 1
+  bootYaw: 0,        // 相机偏航偏移：入场时回正
+  bootLock: false,   // 调试：定格入场某一帧
+  reveal: 1.99,      // 树显形进度（>= 1.2 全显）
+  bootVeil: false,   // 暗场是否已开始退去
+  bootBurst: false,  // 爆发是否已触发
+  bootFade: false,   // 遮罩是否已开始溶解
+  wishes: 0,         // 已收集的愿望星
+  to: '',            // 收礼人：显示在"致"后面
+  from: '',          // 送礼人：显示在祝福语下方
+  lite: false,       // 省电模式：少放烟花、跳过最外层泛光
+  meteorT: 0,        // 距下一颗流星的计时
+  meteorGap: 6.5,    // 下一颗流星的间隔
+  meteorOn: false,   // 入场结束后才开始放流星
+  meteorsSeen: 0,
+  guideDone: false,  // 引导是否已经看过
+  hintShown: false,
+};
+
+/* ---------- 资源 ---------- */
+let treeBuf, staticBuf, snow, sparks, dynBuf;
+
+function buildAll() {
+  rnd = makeRng(20261225);
+  const tree = buildTree();
+  const garland = buildGarland();
+  const star = buildStar();
+  const bg = buildBgStars();
+  const ground = buildGround(tree);
+
+  // 合并静态粒子
+  const parts = [tree, garland, star, bg, ground];
+  let total = 0;
+  for (const p of parts) total += p.n;
+
+  let data = new Float32Array(total * STRIDE);
+  let o = 0;
+  for (const p of parts) { data.set(p.a.subarray(0, p.n * STRIDE), o); o += p.n * STRIDE; }
+
+  // 画质抽稀：手机只保留一部分叶子，其余（灯串/星/雪/倒影）一律不动，保证造型完整
+  if (app.quality < 1) {
+    const keepRate = app.quality;
+    const keep = [];
+    for (let i = 0; i < total; i++) {
+      const kind = data[i * STRIDE + 5];
+      if (kind === K_LEAF && rnd() > keepRate) continue;
+      keep.push(i);
+    }
+    const nd = new Float32Array(keep.length * STRIDE);
+    keep.forEach((src, dst) => nd.set(data.subarray(src * STRIDE, src * STRIDE + STRIDE), dst * STRIDE));
+    data = nd; total = keep.length;
+  }
+
+  treeBuf = tree;
+  staticBuf = mkBuffer(data, gl.STATIC_DRAW);
+  staticBuf.count = total;
+
+  // 飘雪
+  snow = { n: 190, pos: new Float32Array(190 * 3), vel: new Float32Array(190 * 3), ph: new Float32Array(190) };
+  for (let i = 0; i < snow.n; i++) {
+    snow.pos[i*3]   = rf(-4.4, 4.4);
+    snow.pos[i*3+1] = rf(-3.4, 4.2);
+    snow.pos[i*3+2] = rf(-4.4, 4.4);
+    snow.vel[i*3]   = rf(-0.05, 0.05);
+    snow.vel[i*3+1] = rf(0.16, 0.52);
+    snow.vel[i*3+2] = rf(-0.05, 0.05);
+    snow.ph[i] = rf(0, TAU);
+  }
+
+  // 烟花
+  const CAP = 2600;
+  sparks = {
+    cap: CAP, cursor: 0, next: 0.5,
+    pos: new Float32Array(CAP * 3),
+    vel: new Float32Array(CAP * 3),
+    life: new Float32Array(CAP),
+    decay: new Float32Array(CAP),
+    slot: new Float32Array(CAP),
+    ph: new Float32Array(CAP),
+  };
+
+  // 每个火花画 3 个点做拖尾，容量要按 3 倍留
+  const TAIL = 3;
+  dynBuf = mkBuffer(new Float32Array((snow.n + CAP * TAIL) * STRIDE), gl.DYNAMIC_DRAW);
+  dynBuf.capN = snow.n + CAP * TAIL;
+  dynBuf.data = new Float32Array((snow.n + CAP * TAIL) * STRIDE);
+  sparks.TAIL = TAIL;
+}
+
+function mkBuffer(arr, usage) {
+  const b = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, b);
+  gl.bufferData(gl.ARRAY_BUFFER, arr, usage);
+  return b;
+}
+
+function bindAttribs(p, stride) {
+  const names = ['a_pos','a_size','a_slot','a_kind','a_phase','a_hn','a_rn','a_gain'];
+  const sizes = [3, 1, 1, 1, 1, 1, 1, 1];
+  const offs  = [0, 3, 4, 5, 6, 7, 8, 9];
+  for (let i = 0; i < names.length; i++) {
+    const loc = p.a[names[i]];
+    if (loc === undefined || loc < 0) continue;
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, sizes[i], gl.FLOAT, false, stride * 4, offs[i] * 4);
+  }
+}
+
+/* ---------- 尺寸 ---------- */
+let sceneRT = null, b1 = null, b1tmp = null, b2 = null, b2tmp = null;
+
+function resize() {
+  let dpr = Math.min(window.devicePixelRatio || 1, app.isMobile ? 3.0 : 2.0) * app.pxScale;
+  const cssW = Math.max(1, window.innerWidth), cssH = Math.max(1, window.innerHeight);
+  // 像素预算：高分屏手机按 DPR 3 渲染会直接把移动 GPU 压垮，这里按总像素封顶
+  const want = cssW * cssH * dpr * dpr;
+  if (want > app.pxBudget) dpr *= Math.sqrt(app.pxBudget / want);
+  dpr = Math.max(0.7, dpr);
+  const cw = Math.max(1, Math.round(cssW * dpr));
+  const ch = Math.max(1, Math.round(cssH * dpr));
+  if (cw === app.w && ch === app.h) return;
+  app.w = cw; app.h = ch; app.dpr = dpr;
+  canvas.width = cw; canvas.height = ch;
+
+  const del = (rt) => { if (rt) { gl.deleteTexture(rt.tex); gl.deleteFramebuffer(rt.fbo); } };
+  del(sceneRT); del(b1); del(b1tmp); del(b2); del(b2tmp);
+
+  sceneRT = makeTarget(cw, ch, floatTarget);
+  const q1w = Math.max(2, cw >> 2), q1h = Math.max(2, ch >> 2);
+  b1 = makeTarget(q1w, q1h, true);
+  b1tmp = makeTarget(q1w, q1h, true);
+  const q2w = Math.max(2, cw >> 3), q2h = Math.max(2, ch >> 3);
+  b2 = makeTarget(q2w, q2h, true);
+  b2tmp = makeTarget(q2w, q2h, true);
+}
+
+/* ---------- 交互 ---------- */
+let dragging = false, lastX = 0, lastY = 0, lastMove = 0;
+const activePointers = new Set();
+
+/* 一次按下里区分 点按 / 左右滑 / 上下滑 / 长按 / 双击 */
+let gX = 0, gY = 0, gT = 0, gMoved = 0, gLong = false, longTimer = 0, motionArmed = false;
+let gAx = 0, gAy = 0;   // 本次按下以来的累计位移，用来判断"主轴"（横拖还是竖拖）
+let lastTapT = 0, lastTapX = 0, lastTapY = 0;
+const LONG_MS = 380, TAP_MS = 320, TAP_PX = 14, DBL_MS = 300, DBL_PX = 44;
+
+/* 屏幕坐标 → 世界坐标：取过树轴的竖直平面，够烟花定位用 */
+function screenToWorld(sx, sy) {
+  const halfH = app.dist * Math.tan(0.3115);
+  const halfW = halfH * (app.w / Math.max(1, app.h));
+  const nx = (sx / Math.max(1, window.innerWidth)) * 2 - 1;
+  const ny = 1 - (sy / Math.max(1, window.innerHeight)) * 2;
+  const lx = nx * halfW;
+  const ly = ny * halfH - 0.35;
+  const cy = Math.cos(-app.yaw), sy2 = Math.sin(-app.yaw);
+  return [lx * cy, ly, -lx * sy2];
+}
+
+/* 点按 → 冲击波：一圈光从触点推开粒子 */
+function triggerWave(sx, sy) {
+  app.waveO = screenToWorld(sx, sy);
+  app.waveT = 0;
+  app.taps++;
+  AU.sfx('ping', sx);
+  if (navigator.vibrate) { try { navigator.vibrate(12); } catch (_) {} }
+}
+
+/* 双击 → 全树点亮：整棵提亮 + 一朵烟花 + 一次涟漪，三件事一起发生 */
+function illuminate(sx, sy) {
+  app.flash = 1;
+  app.waveO = [0, -0.35, 0];
+  app.waveT = 0;
+  const p = screenToWorld(sx, sy);
+  emitFirework(app.t, 0.05, p);
+  app.taps++;
+  toast('全树点亮', 'ILLUMINATION');
+  AU.sfx('flash');
+  if (navigator.vibrate) { try { navigator.vibrate([16, 26, 20]); } catch (_) {} }
+}
+
+/* 三指轻点 → 回到初始机位 */
+function resetView() {
+  app.yaw = 0.42; app.pitch = 0.105;
+  app.vYaw = 0; app.vPitch = 0;
+  app.distT = 14.6; app.dist = 14.6;
+  toast('视角复位', 'VIEW RESET');
+  AU.sfx('ok');
+  if (navigator.vibrate) { try { navigator.vibrate([10, 24, 12]); } catch (_) {} }
+}
+
+/* 手势反馈条：同一时刻只显示一条，2s 后自动收 */
+let toastTimer = 0;
+function toast(cn, en) {
+  if (!toastEl) return;
+  toastCnEl.textContent = cn;
+  toastEnEl.textContent = en || '';
+  toastEl.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('on'), 1900);
+}
+
+/* 手势统一入口：pointer 管鼠标/触控笔，touch 管手指。
+   两条通道共用下面这套判定，靠 gestureSrc 互斥，同一次拖动不会被处理两遍。
+   之前单指旋转只挂在 pointermove 上，iOS Safari 里 pointer 事件不触发时，
+   就退化成"只有双指捏合能用、手指拖不动树"——这就是手机上转不了的原因。 */
+let gestureSrc = null;   // 'pointer' | 'touch'
+let multiTouch = false;  // 双指期间不再走单指分支
+const PITCH_MAX = 1.52;  // 环绕视角的俯仰极限：±87°，再大画面就翻面了
+
+function beginGesture(x, y, src) {
+  gestureSrc = src;
+  if (!motionArmed) { motionArmed = true; enableMotion(); }   // iOS 要在手势里申请
+  dragging = true; lastX = x; lastY = y;
+  app.vYaw = 0; app.vPitch = 0;      // 新的一次按下，清掉上一次的惯性
+  gX = x; gY = y; gT = performance.now();
+  gMoved = 0; gLong = false; gAx = 0; gAy = 0;
+  clearTimeout(longTimer);
+  longTimer = setTimeout(() => {
+    if (gMoved >= TAP_PX) return;
+    gLong = true;
+    const p = screenToWorld(gX, gY);
+    emitFirework(app.t, 0, p);          // 长按 → 就在这里炸一朵
+    AU.sfx('boom');
+    if (navigator.vibrate) { try { navigator.vibrate([10, 40, 20]); } catch (_) {} }
+  }, LONG_MS);
+}
+
+/* ---- 通道一：鼠标 / 触控笔 ---- */
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'touch') return;   // 手指交给下面的 touch 通道
+  activePointers.add(e.pointerId);
+  // 三指轻点 → 视角复位（顺手就能回到初始机位）
+  if (activePointers.size === 3) {
+    dragging = false;
+    clearTimeout(longTimer);
+    gMoved = 999;
+    resetView();
+    return;
+  }
+  if (activePointers.size > 1) {
+    dragging = false;
+    clearTimeout(longTimer);
+    gMoved = 999;                      // 双指缩放，别再判点按/长按
+    return;
+  }
+  beginGesture(e.clientX, e.clientY, 'pointer');
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+});
+function moveGesture(x, y) {
+  if (!dragging) return;
+  const dx = x - lastX, dy = y - lastY;
+  lastX = x; lastY = y;
+  gMoved += Math.hypot(dx, dy);
+  gAx += dx; gAy += dy;
+  if (gMoved >= TAP_PX) clearTimeout(longTimer);
+
+  /* 主轴判定：竖着拉的时候别让树跟着乱转，横着拉的时候别改俯仰。
+     这里用的是"最近几帧"的位移包络（每帧乘 0.86 衰减），不是从按下开始的累计——
+     累计值一旦被竖拖带偏，后面就算改成横拖也得追好几百像素才恢复，
+     表现就是"先上下转一下，再左右拖就几乎转不动了"。包络只看当下在往哪边拖。 */
+  gAx = gAx * 0.86 + Math.abs(dx);
+  gAy = gAy * 0.86 + Math.abs(dy);
+  const ax = gAx, ay = gAy;
+  const vert  = ay > ax * 1.6 && ay > 24;
+  const horiz = ax > ay * 1.6 && ax > 24;
+
+  /* 环绕视角：横向 yaw 本来就不限角度，可以一直绕圈；
+     纵向 pitch 放开到接近正上方 / 正下方（±1.52 rad ≈ ±87°），
+     这样能绕着树看各个角度——俯到树顶、仰到树底都在范围里。
+     留 3° 余量是为了不让画面翻个面（过 90° 世界就上下颠倒了）。 */
+  const kYaw   = 0.0078;
+  const kPitch = 0.0058;
+
+  app.yaw += dx * kYaw * (vert ? 0.2 : 1);
+  app.pitch = Math.max(-PITCH_MAX, Math.min(PITCH_MAX,
+    app.pitch + dy * kPitch * (horiz ? 0.12 : (vert ? 0.95 : 0.72))));
+  app.vYaw = dx * kYaw * 0.85;
+  app.vPitch = dy * kPitch * 0.5;
+  lastMove = performance.now();
+}
+
+canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'touch' || gestureSrc !== 'pointer') return;
+  moveGesture(e.clientX, e.clientY);
+});
+/* allowTap=false 用于 pointercancel / touchcancel / 被系统打断：只收尾，不当成点按 */
+function endGesture(x, y, allowTap) {
+  const wasDragging = dragging;
+  dragging = false;
+  gestureSrc = null;
+  lastMove = performance.now();
+  clearTimeout(longTimer);
+
+  if (!wasDragging || !allowTap || gLong) return;
+
+  const dt = performance.now() - gT;
+  const dx = x - gX, dy = y - gY;
+  const adx = Math.abs(dx), ady = Math.abs(dy);
+  const now = performance.now();
+
+  // 点按（几乎没动）—— 连点两下升级成"点亮"
+  if (gMoved < TAP_PX && dt < TAP_MS) {
+    const isDbl = now - lastTapT < DBL_MS &&
+                  Math.hypot(x - lastTapX, y - lastTapY) < DBL_PX;
+    if (isDbl) {
+      lastTapT = 0;
+      illuminate(x, y);
+    } else {
+      lastTapT = now; lastTapX = x; lastTapY = y;
+      triggerWave(x, y);
+    }
+    return;
+  }
+
+  /* 左右"甩"切模式：必须又快又狠才认。
+     以前的门槛是 52px / 620ms 内，手指横着一划就触发——而横划恰恰是转视角最常用的动作，
+     于是每次想绕树转都被切成换模式，看起来就像"左右根本不能转，只有上下能动"。
+     现在要求 位移 > 120px 且速度 > 1.15 px/ms（正常拖动一般只有 0.3~0.8），
+     甩一下才切，正常转视角绝不会被它抢走；底部那排按钮和方向键也照样能换。 */
+  const swipeSpeed = adx / Math.max(1, dt);
+  if (adx > 120 && ady < adx * 0.45 && dt < 400 && swipeSpeed > 1.15) {
+    const dir = dx < 0 ? 1 : -1;
+    setMode((app.mode + dir + MODES.length) % MODES.length);
+    toast(MODES[(app.mode + MODES.length) % MODES.length].cn, MODES[(app.mode + MODES.length) % MODES.length].en);
+    if (navigator.vibrate) { try { navigator.vibrate(9); } catch (_) {} }
+    return;
+  }
+
+  // 上下快滑 → 推近 / 拉远：同样只认"快速甩动"，竖向拖拽本身是俯仰
+  const swipeSpeedY = ady / Math.max(1, dt);
+  if (ady > 120 && adx < ady * 0.45 && dt < 400 && swipeSpeedY > 1.15) {
+    const near = dy < 0;
+    const d = near ? -1.9 : 1.9;
+    app.distT = Math.max(8.0, Math.min(26.0, app.distT + d));
+    app.dist  = Math.max(8.0, Math.min(26.0, app.dist + d));   // 一起跳，手感才跟得上
+    toast(near ? '推近' : '拉远', near ? 'ZOOM IN' : 'ZOOM OUT');
+    if (navigator.vibrate) { try { navigator.vibrate(9); } catch (_) {} }
+  }
+}
+canvas.addEventListener('pointerup', (e) => {
+  if (e.pointerType === 'touch') return;
+  activePointers.delete(e.pointerId);
+  try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+  endGesture(e.clientX, e.clientY, activePointers.size === 0);
+});
+canvas.addEventListener('pointercancel', (e) => {
+  if (e.pointerType === 'touch') return;
+  activePointers.delete(e.pointerId);
+  endGesture(e.clientX, e.clientY, false);   // 被系统打断，不判点按
+});
+
+/* 摇一摇 → 整树晃一下 */
+let shakeCool = 0;
+function onMotion(e) {
+  const a = e.accelerationIncludingGravity || e.acceleration;
+  if (!a) return;
+  const mag = Math.hypot(a.x || 0, a.y || 0, a.z || 0);
+  const now = performance.now();
+  if (mag > 24 && now - shakeCool > 320) {
+    shakeCool = now;
+    app.shake = Math.min(0.55, app.shake + 0.34);
+    AU.sfx('thump');
+    if (navigator.vibrate) { try { navigator.vibrate([12, 30, 16]); } catch (_) {} }
+  }
+}
+function enableMotion() {
+  if (!app.isMobile || !window.DeviceMotionEvent) return;
+  if (typeof DeviceMotionEvent.requestPermission === 'function') {
+    DeviceMotionEvent.requestPermission().then((r) => {
+      if (r === 'granted') window.addEventListener('devicemotion', onMotion);
+    }).catch(() => {});
+  } else {
+    window.addEventListener('devicemotion', onMotion);
+  }
+}
+
+let wheelAcc = 0;
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  wheelAcc += e.deltaY;
+  app.distT = Math.max(8.0, Math.min(26.0, app.distT + wheelAcc * 0.012));
+  wheelAcc = 0;
+}, { passive: false });
+
+/* ---- 通道二：手指 ----
+   单指拖动 = 转树（横向自转 / 纵向俯仰）；双指捏合 = 缩放；双指扭动 = 自转；三指轻点 = 复位。
+   单指必须挂在 touch 事件上：iOS Safari 手指不产生 pointermove，只靠 pointer 通道的话
+   手机上就只剩双指能用，单指拖不动树。 */
+let pinchD = 0, pinchA = 0;
+
+canvas.addEventListener('touchstart', (e) => {
+  if (e.touches.length >= 3) {          // 三指轻点 → 视角复位
+    multiTouch = true;
+    dragging = false;
+    clearTimeout(longTimer);
+    gMoved = 999;
+    resetView();
+    return;
+  }
+  if (e.touches.length === 2) {         // 双指：交给捏合分支，单指逻辑退场
+    multiTouch = true;
+    dragging = false;
+    clearTimeout(longTimer);
+    gMoved = 999;
+    pinchD = 0; pinchA = 0;
+    return;
+  }
+  multiTouch = false;
+  const t = e.touches[0];
+  beginGesture(t.clientX, t.clientY, 'touch');
+}, { passive: true });
+
+canvas.addEventListener('touchmove', (e) => {
+  // 单指：拖到哪儿，树就转到哪儿
+  if (e.touches.length === 1 && !multiTouch) {
+    const t = e.touches[0];
+    moveGesture(t.clientX, t.clientY);
+    return;
+  }
+  if (e.touches.length === 2) {
+    const x0 = e.touches[0].clientX, y0 = e.touches[0].clientY;
+    const x1 = e.touches[1].clientX, y1 = e.touches[1].clientY;
+    const d = Math.hypot(x1 - x0, y1 - y0);
+    if (pinchD) app.distT = Math.max(8.0, Math.min(26.0, app.distT - (d - pinchD) * 0.05));
+    pinchD = d;
+
+    // 两指连线转过的角度 → 直接带动树自转（惯性也给一点，松手还会滑一段）
+    const a = Math.atan2(y1 - y0, x1 - x0);
+    if (pinchA) {
+      let da = a - pinchA;
+      while (da > Math.PI) da -= TAU;
+      while (da < -Math.PI) da += TAU;
+      if (Math.abs(da) < 0.5) {          // 跳变时不动，避免手指交替换位时闪一下
+        app.yaw += da * 0.85;
+        app.vYaw = da * 0.06;
+        dragging = false;                // 双指期间不要走单指的惯性分支
+      }
+    }
+    pinchA = a;
+  }
+}, { passive: true });
+
+canvas.addEventListener('touchend', (e) => {
+  pinchD = 0; pinchA = 0;
+  if (multiTouch) {
+    if (e.touches.length === 0) multiTouch = false;   // 手指全松开才退出多指态
+    return;
+  }
+  const t = e.changedTouches && e.changedTouches[0];
+  if (!t) return;
+  endGesture(t.clientX, t.clientY, true);
+}, { passive: true });
+
+canvas.addEventListener('touchcancel', () => {
+  pinchD = 0; pinchA = 0; multiTouch = false;
+  endGesture(0, 0, false);              // 被系统打断，不判点按
+}, { passive: true });
+
+/* ---------- UI ---------- */
+const nav = document.getElementById('modes');
+const mcn = document.getElementById('mcn');
+const men = document.getElementById('men');
+const mdesc = document.getElementById('mdesc');
+const ui = document.getElementById('ui');
+const toastEl   = document.getElementById('toast');
+const toastCnEl = document.getElementById('toastCn');
+const toastEnEl = document.getElementById('toastEn');
+
+/* ---------- 音频打通 ----------
+   iOS 只允许在真实手势里 resume AudioContext，所以第一次按下/按键就把声音接上；
+   之后背景音乐淡入，科技语音才有地方播 */
+const sndBtn = document.getElementById('sndBtn');
+if (sndBtn) {
+  sndBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    const on = AU.toggle();
+    sndBtn.classList.remove('wait');
+    if (on) sndBtn.classList.add('on'); else sndBtn.classList.remove('on');
+  });
+}
+// 上次关了就继续关着；?snd=0 也能强制静音（录屏、无头截图用）
+try {
+  if (localStorage.getItem('aurora.snd') === '0') {
+    AU.setOn(false);
+    if (sndBtn) sndBtn.classList.remove('wait');
+  }
+} catch (_) {}
+if (new URLSearchParams(location.search).get('snd') === '0') {
+  AU.setOn(false, true);   // 调试参数不写进本地存储，免得一次静音链接把人永久静音
+  if (sndBtn) sndBtn.classList.remove('wait');
+}
+
+/* ============================================================
+   5.2 祝福语 / 收礼人 / 分享 / 流星许愿 / 首次引导
+   ============================================================ */
+const blessWrap   = document.querySelector('.bless');
+const blessNameEl = document.getElementById('blessName');
+const blessToEl   = document.getElementById('blessTo');
+const blessFromEl = document.getElementById('blessFrom');
+const blessFromNameEl = document.getElementById('blessFromName');
+const wishBarEl   = document.getElementById('wishBar');
+const wishNumEl   = document.getElementById('wishNum');
+const nameBoxEl   = document.getElementById('nameBox');
+const toInEl      = document.getElementById('toIn');
+const fromInEl    = document.getElementById('fromIn');
+const shareBtn    = document.getElementById('shareBtn');
+const shareTxtEl  = document.getElementById('shareTxt');
+const qrBoxEl     = document.getElementById('qrBox');
+const qrCanvasEl  = document.getElementById('qrCanvas');
+const qrToEl      = document.getElementById('qrTo');
+const starGlowEl  = document.getElementById('starGlow');
+const meteorLayer = document.getElementById('meteors');
+const guideEl     = document.getElementById('guide');
+const gdTextEl    = document.getElementById('gdText');
+const gdIconEl    = document.getElementById('gdIcon');
+const auroraEl    = document.getElementById('auroraBurst');
+
+const WISH_MAX = 5;
+
+/* ---------- 祝福对象：写给谁 / 谁写的 ----------
+   ?to= 是收礼人（显示在"致"后面），?from= 是送礼人（下方小字）。
+   链接里带来的值优先于本机存的 —— 这样一条链接本身就是一份礼物，
+   收到的人改不了"写给谁"，只能改自己要不要留名。 */
+function cleanName(v) {
+  return String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 12);
+}
+
+function applyNames(to, from) {
+  app.to   = cleanName(to);
+  app.from = cleanName(from);
+
+  if (blessNameEl) blessNameEl.textContent = app.to || '所有人';
+  if (blessToEl) {
+    blessToEl.setAttribute('aria-label',
+      app.to ? '写给 ' + app.to + '，点击修改' : '写给所有人，点击填写收礼人');
+  }
+  if (blessFromEl && blessFromNameEl) {
+    if (app.from) {
+      blessFromNameEl.textContent = app.from;
+      blessFromEl.hidden = false;
+    } else {
+      blessFromEl.hidden = true;
+    }
+  }
+  if (shareTxtEl) shareTxtEl.textContent = app.to ? '送给 ' + app.to : '送给 TA';
+  if (qrToEl) {
+    qrToEl.textContent = '';
+    if (app.to) {
+      qrToEl.appendChild(document.createTextNode('致 · '));
+      const b = document.createElement('b');
+      b.textContent = app.to;
+      qrToEl.appendChild(b);
+    } else {
+      qrToEl.textContent = '致 · 所有人';
+    }
+  }
+}
+
+function openNameBox() {
+  if (!nameBoxEl) return;
+  if (toInEl) toInEl.value = app.to || '';
+  if (fromInEl) fromInEl.value = app.from || '';
+  nameBoxEl.classList.add('on');
+  setTimeout(() => { try { toInEl.focus(); toInEl.select(); } catch (_) {} }, 80);
+}
+function closeNameBox() { if (nameBoxEl) nameBoxEl.classList.remove('on'); }
+
+if (blessToEl) {
+  blessToEl.addEventListener('click', (e) => { e.preventDefault(); AU.sfx('ping'); openNameBox(); });
+}
+if (nameBoxEl) {
+  const okBtn = document.getElementById('nbOk');
+  const noBtn = document.getElementById('nbNo');
+  const commit = () => {
+    applyNames(toInEl ? toInEl.value : '', fromInEl ? fromInEl.value : '');
+    try {
+      localStorage.setItem('aurora.to', app.to);
+      localStorage.setItem('aurora.from', app.from);
+      localStorage.removeItem('aurora.sign');   // 旧键只用来迁移，写一次就清掉
+    } catch (_) {}
+    closeNameBox();
+    AU.sfx('ok');
+    if (app.to) toast('写给 ' + app.to, 'FOR YOU');
+    else if (app.from) toast(app.from + ' 的祝福', 'FROM ' + app.from);
+  };
+  if (okBtn) okBtn.addEventListener('click', commit);
+  if (noBtn) noBtn.addEventListener('click', () => { closeNameBox(); AU.sfx('nope'); });
+  [toInEl, fromInEl].forEach((el) => {
+    if (!el) return;
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); closeNameBox(); }
+    });
+  });
+  // 点空白处关掉
+  nameBoxEl.addEventListener('pointerdown', (e) => {
+    if (e.target === nameBoxEl) closeNameBox();
+  });
+}
+
+/* 本机存的值先顶上，链接里的参数再覆盖 —— 并且记下"这份祝福是寄来的" */
+const NAMES_IN_URL = (function () {
+  const qs = new URLSearchParams(location.search);
+  let to = '', from = '';
+  try {
+    to = localStorage.getItem('aurora.to') || localStorage.getItem('aurora.sign') || '';
+    from = localStorage.getItem('aurora.from') || '';
+  } catch (_) {}
+  if (qs.has('to')) to = qs.get('to');
+  if (qs.has('from')) from = qs.get('from');
+  applyNames(to, from);
+  return qs.has('to') || qs.has('from');
+})();
+
+/* 主曲：默认就是打包自带的 bgm.m4a。?bgm=./别的文件 可以换一首，
+   ?bgm=0 则关掉外挂曲、回到纯合成音（调试用）。
+
+   注意：发布站上除入口页以外的静态资源也要带 sharecode，否则一律 403（"链接不完整"）。
+   所以相对路径的音源在拼 URL 时把 sharecode 原样带过去。 */
+(function () {
+  const qs = new URLSearchParams(location.search);
+  const bgm = qs.get('bgm');
+  let url = (bgm === '0' || bgm === 'off') ? '' : (bgm || 'bgm.m4a');
+  const sc = qs.get('sharecode');
+  if (url && sc && !/^https?:/i.test(url) && !/[?&]sharecode=/.test(url)) {
+    url += (url.indexOf('?') < 0 ? '?' : '&') + 'sharecode=' + encodeURIComponent(sc);
+  }
+  AU.setBgm(url);
+})();
+
+/* ---------- 分享：一条链接就是一份礼物 ----------
+   手机上直接调系统面板（微信、QQ、短信都在里面）；
+   桌面没有 share 就弹二维码，让手机扫走。 */
+function shareUrl() {
+  try {
+    const u = new URL(location.href);
+    const keep = new URLSearchParams();
+    const sc = u.searchParams.get('sharecode');
+    if (sc) keep.set('sharecode', sc);
+    if (app.to) keep.set('to', app.to);
+    if (app.from) keep.set('from', app.from);
+    u.search = keep.toString();
+    u.hash = '';
+    return u.href;
+  } catch (_) {
+    return location.href;
+  }
+}
+
+function legacyCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (_) {}
+  ta.remove();
+  if (ok) done();
+  else toast('长按地址栏复制链接', 'COPY FROM ADDRESS BAR');
+}
+
+function copyLink() {
+  const url = shareUrl();
+  const done = () => { toast('链接已复制', 'LINK COPIED'); AU.sfx('ok'); };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(url).then(done, () => legacyCopy(url, done));
+  } else {
+    legacyCopy(url, done);
+  }
+}
+
+function drawQR() {
+  if (!qrCanvasEl) return false;
+  const r = QR.make(shareUrl());
+  if (!r) return false;
+  const quiet = 3;
+  const n = r.size + quiet * 2;
+  // 每个模块都落在整数物理像素上，缩放插值会把边缘糊掉，扫码就吃亏
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  // 宽度和可用高度一起卡：横屏时瓶颈是高度，不是宽度
+  const maxH = Math.round(window.innerHeight * 0.54);
+  const cssMax = Math.max(120, Math.min(260, Math.round(window.innerWidth * 0.72), maxH));
+  let cell = Math.floor(cssMax * dpr / n);
+  if (cell < 3) cell = 3;
+  const dim = cell * n;
+  qrCanvasEl.width = qrCanvasEl.height = dim;
+  qrCanvasEl.style.width = qrCanvasEl.style.height = Math.round(dim / dpr) + 'px';
+  const ctx = qrCanvasEl.getContext('2d');
+  ctx.fillStyle = '#eafff8';
+  ctx.fillRect(0, 0, dim, dim);
+  ctx.fillStyle = '#04121a';
+  for (let y = 0; y < r.size; y++)
+    for (let x = 0; x < r.size; x++)
+      if (r.modules[y][x]) ctx.fillRect((x + quiet) * cell, (y + quiet) * cell, cell, cell);
+  return true;
+}
+
+function showQR() {
+  if (!qrBoxEl) return;
+  if (!drawQR()) {
+    // 名字长到连版本 9（232 字节）都塞不下，别画一张扫不出来的码
+    copyLink();
+    setTimeout(() => toast('名字较长，已复制链接', 'LINK COPIED'), 1500);
+    return;
+  }
+  qrBoxEl.classList.add('on');
+  AU.sfx('ping');
+}
+function hideQR() { if (qrBoxEl) qrBoxEl.classList.remove('on'); }
+
+function doShare() {
+  const url = shareUrl();
+  const title = app.to ? '送给 ' + app.to + ' 的极光圣诞树' : 'AURORA-7 · 极光圣诞树';
+  const text = app.to
+    ? '我把这棵极光圣诞树送给你 —— ' + app.to + '，圣诞快乐。'
+    : '一棵可以用手转的极光圣诞树，圣诞快乐。';
+  // 手机上直接走系统面板，不用多一步二维码
+  if (navigator.share && app.isMobile) {
+    try {
+      const p = navigator.share({ title: title, text: text, url: url });
+      if (p && p.catch) p.catch((e) => {
+        if (e && e.name === 'AbortError') return;   // 自己取消的，别打扰
+        showQR();
+      });
+      else AU.sfx('ok');
+      return;
+    } catch (_) { /* 落到二维码 */ }
+  }
+  showQR();
+}
+
+if (shareBtn) {
+  shareBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    shareBtn.classList.remove('glow');
+    doShare();
+  });
+}
+if (qrBoxEl) {
+  const qc = document.getElementById('qrCopy');
+  const qx = document.getElementById('qrClose');
+  if (qc) qc.addEventListener('click', copyLink);
+  if (qx) qx.addEventListener('click', hideQR);
+  qrBoxEl.addEventListener('pointerdown', (e) => { if (e.target === qrBoxEl) hideQR(); });
+}
+
+
+/* ---------- 流星许愿 ---------- */
+function spawnMeteor() {
+  if (!meteorLayer || document.hidden) return;
+  const W = window.innerWidth, H = window.innerHeight;
+  const el = document.createElement('div');
+  el.className = 'meteor';
+  el.setAttribute('role', 'button');
+  el.setAttribute('aria-label', '流星：点一下收下愿望星');
+
+  // 起点在右上，往左下划；dx/dy 是这条轨迹的位移
+  const x0 = W * (0.46 + Math.random() * 0.46);
+  const y0 = H * (0.06 + Math.random() * 0.26);
+  const dx = -(W * (0.46 + Math.random() * 0.34));
+  const dy = H * (0.40 + Math.random() * 0.24);
+  const life = 2.30 + Math.random() * 0.70;
+
+  el.style.left = x0.toFixed(1) + 'px';
+  el.style.top  = y0.toFixed(1) + 'px';
+  el.style.setProperty('--dx', dx.toFixed(1) + 'px');
+  el.style.setProperty('--dy', dy.toFixed(1) + 'px');
+  el.style.setProperty('--life', life.toFixed(2) + 's');
+  el.innerHTML = '<i></i><b></b>';
+
+  let taken = false, dead = false;
+  const kill = () => { if (!dead) { dead = true; el.remove(); } };
+  const take = (e) => {
+    if (taken) return;
+    taken = true;
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    const r = el.getBoundingClientRect();
+    collectWish(el, r.left, r.top);
+    setTimeout(kill, 220);
+  };
+  el.addEventListener('pointerdown', take);
+  el.addEventListener('click', take);
+  el.addEventListener('animationend', kill);
+  setTimeout(kill, life * 1000 + 400);        // 动画不触发也不留垃圾节点
+
+  meteorLayer.appendChild(el);
+  app.meteorsSeen = (app.meteorsSeen || 0) + 1;
+}
+
+function collectWish(el, cx, cy) {
+  if (el) el.classList.add('caught');
+  app.wishes = Math.min(WISH_MAX, app.wishes + 1);
+  if (wishBarEl) wishBarEl.hidden = false;
+  if (wishNumEl) wishNumEl.textContent = app.wishes;
+  toast('收下一颗愿望星', 'WISH COLLECTED');
+  AU.sfx('ok');
+  const p = screenToWorld(cx, cy);
+  emitFirework(app.t, 0.02, p);
+  if (navigator.vibrate) { try { navigator.vibrate([8, 22, 10]); } catch (_) {} }
+  if (app.wishes >= WISH_MAX) setTimeout(triggerAurora, 260);
+}
+
+/* 集满五颗：极光铺满画面，树整棵提亮，祝福语转金 */
+function triggerAurora() {
+  app.wishes = 0;
+  if (wishNumEl) wishNumEl.textContent = '0';
+  app.flash = 1.35;
+  app.waveO = [0, -0.35, 0]; app.waveT = 0;
+  app.shake = 0.075;
+  for (let i = 0; i < 4; i++) setTimeout(() => emitFirework(app.t), i * 280);
+  if (auroraEl) {
+    auroraEl.classList.remove('on');
+    void auroraEl.offsetWidth;
+    auroraEl.classList.add('on');
+    setTimeout(() => auroraEl.classList.remove('on'), 4200);
+  }
+  if (blessWrap) blessWrap.classList.add('gold');
+  AU.sfx('flash');
+  AU.say('愿望已应验，极光为你展开');
+  toast('愿望成真 · 极光爆发', 'WISH GRANTED');
+  if (navigator.vibrate) { try { navigator.vibrate([18, 40, 22, 40, 26]); } catch (_) {} }
+}
+
+/* ---------- 首次引导 ---------- */
+const GUIDE = [
+  { icon: 'line', html: '<b>左右滑</b> 换一种光效' },
+  { icon: 'ring', html: '<b>双击</b> 点亮整棵树' },
+  { icon: 'ring', html: '<b>点中流星</b> 收一颗愿望星' },
+  { icon: 'line', html: '<b>双指</b> 缩放旋转 · <b>长按</b> 放烟花' }
+];
+let guideTimer = 0, guideStep = 0;
+
+function runGuide() {
+  if (!guideEl || app.guideDone) return;
+  app.guideDone = true;
+  try { localStorage.setItem('aurora.guide', '1'); } catch (_) {}
+  guideStep = 0;
+  const tick = () => {
+    const g = GUIDE[guideStep];
+    if (!g) { guideEl.classList.remove('on'); return; }
+    if (gdIconEl) gdIconEl.className = g.icon === 'line' ? 'gd-line' : 'gd-ring';
+    if (gdTextEl) gdTextEl.innerHTML = g.html;
+    guideEl.classList.add('on');
+    guideTimer = setTimeout(() => { guideStep++; tick(); }, 2100);
+    // 手指一碰就收，别挡着玩
+    if (guideStep === 0) {
+      const bye = () => { stopGuide(); window.removeEventListener('pointerdown', bye, true); };
+      window.addEventListener('pointerdown', bye, true);
+    }
+  };
+  setTimeout(tick, 600);
+}
+function stopGuide() {
+  clearTimeout(guideTimer);
+  if (guideEl) guideEl.classList.remove('on');
+}
+
+let auArmed = false;
+function armAudio(silentVoice) {
+  if (auArmed) return;
+  auArmed = true;
+  const ok = AU.unlock();
+  if (ok) {
+    if (sndBtn) sndBtn.classList.add('on');
+    // 没有授权门（桌面 / ?gate=0）时，这一句就是开场语音
+    if (!silentVoice && !window.__gateOpen) AU.say('极光矩阵在线');
+  }
+}
+window.addEventListener('pointerdown', armAudio, true);
+window.addEventListener('keydown', armAudio, true);
+
+/* 装成 App（WebView 关掉了"必须点一下才能播"）时不用等手指：
+   开屏动画一起就有声，八音盒才接得上画面 */
+if (window.__AURORA_APP__) setTimeout(() => { try { armAudio(true); } catch (_) {} }, 80);
+
+MODES.forEach((m, i) => {
+  const b = document.createElement('button');
+  b.className = 'tab' + (i === 0 ? ' on' : '');
+  b.innerHTML = '<span class="k">' + (i + 1) + '</span>' + m.cn;
+  b.addEventListener('click', () => setMode(i));
+  nav.appendChild(b);
+});
+
+/* 手机端提示只有一行宽，文案轮播着放，别挤成一坨 */
+const hintRot = document.getElementById('hintRot');
+const HINT_LINES = [
+  '<b>单指</b>转 · <b>点按</b>涟漪 · <b>双击</b>点亮',
+  '<b>左右滑</b>换模式 · <b>上下滑</b>推拉',
+  '<b>双指</b>缩放旋转 · <b>三指</b>复位 · <b>长按</b>烟花'
+];
+if (app.isMobile && hintRot) {
+  let hintI = 0;
+  setInterval(() => {
+    hintI = (hintI + 1) % HINT_LINES.length;
+    hintRot.style.opacity = '0';
+    setTimeout(() => {
+      hintRot.innerHTML = HINT_LINES[hintI];
+      hintRot.style.opacity = '1';
+    }, 230);
+  }, 4200);
+}
+
+// 桌面端窗口拉得很窄时（比如手机浏览器被识别成桌面），完整快捷键提示放不下会
+// 被裁掉半句。这里按宽度换成短版，避免出现"半句话"。
+const deskHintEl = document.querySelector('.only-desk');
+const DESK_HINT_FULL =
+  '<b>拖拽</b> 旋转 · <b>滚轮</b> 缩放 · <b>1–7</b> 切换 · <b>点按</b> 涟漪 · ' +
+  '<b>长按</b> 烟花 · <b>空格</b> 轮播 · <b>S</b> 截图 · <b>H</b> 隐藏';
+const DESK_HINT_SHORT = '<b>拖拽</b> 旋转 · <b>滚轮</b> 缩放 · <b>点按</b> 涟漪';
+if (deskHintEl) {
+  const fitHint = () => {
+    if (app.isMobile) return;
+    deskHintEl.innerHTML = window.innerWidth < 720 ? DESK_HINT_SHORT : DESK_HINT_FULL;
+  };
+  fitHint();
+  let fitT = 0;
+  window.addEventListener('resize', () => {
+    clearTimeout(fitT);
+    fitT = setTimeout(fitHint, 180);
+  });
+}
+
+function setMode(i, quiet) {
+  if (i === app.mode) return;
+  if (i === 5 && sparks) { sparks.next = 0.05; }
+  app.mode = i;
+  [...nav.children].forEach((c, k) => c.classList.toggle('on', k === i));
+  mcn.textContent = MODES[i].cn;
+  men.textContent = MODES[i].en;
+  mdesc.textContent = MODES[i].desc;
+  if (quiet) {
+    palMix.set(PALETTE[i]); palT = 1;
+    gl.bindTexture(gl.TEXTURE_2D, palTex);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 12, 1, gl.RGBA, gl.UNSIGNED_BYTE, palMix);
+  } else {
+    startPalette(i);
+  }
+  AU.setMode(i, quiet);
+  // 记住上次看的是哪一档，下次进来接着看
+  if (!quiet) { try { localStorage.setItem('aurora.mode', String(i)); } catch (_) {} }
+}
+
+/* 键盘 */
+window.addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase();
+  if (k >= '1' && k <= '7') setMode(+k - 1);
+  else if (k === ' ') { e.preventDefault(); app.cycle = !app.cycle; app.cycleT = 0; }
+  else if (k === 'f') {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
+  else if (k === 'h') { app.hud = !app.hud; ui.classList.toggle('hide', !app.hud); }
+  else if (k === 'm') { if (sndBtn) sndBtn.classList.remove('wait'); AU.toggle(); }
+  else if (k === 's') saveShot();
+  else if (k === 'arrowright') setMode((app.mode + 1) % MODES.length);
+  else if (k === 'arrowleft') setMode((app.mode + MODES.length - 1) % MODES.length);
+  else if (k === 'escape') {
+    // 有浮层就先关浮层，别让 Esc 直接去改画质
+    if (qrBoxEl && qrBoxEl.classList.contains('on')) hideQR();
+    else if (nameBoxEl && nameBoxEl.classList.contains('on')) closeNameBox();
+  }
+});
+
+function saveShot() {
+  canvas.toBlob((blob) => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'aurora7-' + MODES[app.mode].en.toLowerCase().replace(/\s+/g, '-') + '.png';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }, 'image/png');
+}
+
+/* ============================================================
+   6. 每帧
+   ============================================================ */
+
+function emitFirework(t, age, at) {
+  age = age || 0;
+  const sp = sparks;
+  let ox, oy, oz;
+  if (at) {
+    // 长按指定位置起爆
+    ox = at[0]; oy = at[1]; oz = at[2];
+  } else {
+    // 自动放的时候在树周围上方炸开
+    const a = rnd() * TAU;
+    const r = rf(1.7, 3.3);
+    ox = Math.cos(a) * r;
+    oz = Math.sin(a) * r;
+    oy = rf(TREE_H * 0.62, TREE_H * 1.20) - TREE_H * 0.5;
+  }
+  const slot = 7 + Math.floor(rnd() * 3);
+  const n = Math.round((110 + Math.floor(rnd() * 70)) * (app.lite ? 0.6 : 1));
+  const speed = rf(1.9, 3.3);
+
+  for (let i = 0; i < n; i++) {
+    const idx = (sp.cursor + i) % sp.cap;
+    // 单位球面均匀采样
+    let u = rnd() * 2 - 1, th = rnd() * TAU, s = Math.sqrt(1 - u * u);
+    const vx = Math.cos(th) * s, vy = u, vz = Math.sin(th) * s;
+    const sp2 = speed * rf(0.30, 1.15);
+    const px = ox + vx * sp2 * age;
+    const py2 = oy + vy * sp2 * age - 0.575 * age * age;
+    const pz = oz + vz * sp2 * age;
+    sp.pos[idx*3] = px; sp.pos[idx*3+1] = py2; sp.pos[idx*3+2] = pz;
+    sp.vel[idx*3] = vx * sp2; sp.vel[idx*3+1] = vy * sp2; sp.vel[idx*3+2] = vz * sp2;
+    sp.life[idx] = Math.max(0.06, 1.0 - age * 0.85);
+    sp.decay[idx] = 1 / rf(1.1, 2.1);
+    sp.slot[idx] = (rnd() < 0.14) ? 10 : slot;
+    sp.ph[idx] = rnd() * TAU;
+  }
+  sp.cursor = (sp.cursor + n) % sp.cap;
+  app.fwCount++;
+}
+
+function update(dt) {
+  app.t += dt;
+
+  /* ---- 入场序列 ---- */
+  if (app.bootOn && !app.bootLock) {
+    app.bootT += dt;
+    const k = Math.min(1, app.bootT / app.bootDur);
+    app.bootK = k;
+
+    // 前 10% 留给"核心点火"，之后才开始长树；
+    // smoothstep 让树起手慢、中段猛地窜上来、到顶再收住
+    const x  = Math.max(0, Math.min(1, (k - 0.10) / 0.84));
+    const es = x * x * (3 - 2 * x);
+    app.reveal   = -0.16 + 1.38 * es;
+    app.bootZoom = 1 + 0.34 * (1 - es);
+    app.bootYaw  = -0.46 * (1 - es) * (1 - es);
+
+    paintBoot(k);
+
+    // 25%：暗场先退。树在 HUD 网格底下继续往上长，全程都看得见
+    if (!app.bootVeil && k > 0.25) { app.bootVeil = true; if (btVeil) btVeil.classList.add('out'); }
+
+    // 70%：爆发。此时树正好长到接近顶部，顶星像是被这一下炸出来
+    if (!app.bootBurst && k > 0.70) { app.bootBurst = true; fireBootBurst(); }
+    // 78%：遮罩开始溶解，树的收尾和它重叠，不会出现"先亮完再开盖"
+    if (!app.bootFade && k > 0.78)  { app.bootFade = true; endBootCover(); }
+
+    if (k >= 1) {
+      app.bootOn = false;
+      app.reveal = 1.99;
+      app.bootZoom = 1;
+      app.bootYaw = 0;
+    }
+  }
+
+  // 冲击波计时：扩散到 2.4s 后关掉，着色器里就不再做位移
+  if (app.waveT >= 0 && !app.waveLock) {
+    app.waveT += dt;
+    if (app.waveT > 2.4) app.waveT = -1;
+  }
+  // 摇一摇的摆幅衰减（半衰期约 0.35s，晃两下就停）
+  if (app.shake > 0.0005 && !app.shakeLock) app.shake *= Math.pow(0.055, dt);
+  else if (!app.shakeLock) app.shake = 0;
+
+  // 点亮闪光：比摇晃衰减快得多，一闪就没
+  if (app.flash > 0.002 && !app.flashLock) app.flash -= dt * 2.4;
+  else if (app.flash < 0 || !app.flashLock) app.flash = Math.max(0, app.flash);
+
+  // 惯性 + 自转
+  if (!dragging) {
+    app.yaw += app.vYaw;
+    app.pitch = Math.max(-PITCH_MAX, Math.min(PITCH_MAX, app.pitch + app.vPitch));
+    app.vYaw *= 0.935; app.vPitch *= 0.90;
+
+    const idle = performance.now() - lastMove > 2600;
+    if (idle) {
+      const want = app.cycle ? 0.0022 : 0.0011;
+      app.yaw += want * dt * 60 * 0.016;
+    }
+  }
+  app.dist += (app.distT - app.dist) * Math.min(1, dt * 7.5);
+
+  // 色板插值
+  stepPalette(dt);
+
+  // 流星：入场结束后才开始放；还没收过就放得勤一点，别让人一直等
+  if (app.meteorOn && !document.hidden) {
+    app.meteorT += dt;
+    if (app.meteorT >= app.meteorGap) {
+      app.meteorT = 0;
+      spawnMeteor();
+      app.meteorGap = app.meteorsSeen < 2 ? 5.5 + Math.random() * 4.0
+                                          : 10.0 + Math.random() * 9.0;
+    }
+  }
+
+  // 自动轮播
+  if (app.cycle) {
+    app.cycleT += dt;
+    if (app.cycleT > 8.0) { app.cycleT = 0; setMode((app.mode + 1) % MODES.length, true); }
+  }
+
+  // 雪花
+  const s = snow;
+  const TR = TREE_H * 0.5;
+  for (let i = 0; i < s.n; i++) {
+    const i3 = i * 3;
+    s.pos[i3]   += (s.vel[i3] + Math.sin(app.t * 0.7 + s.ph[i]) * 0.10) * dt;
+    s.pos[i3+1] -= s.vel[i3+1] * dt;
+    s.pos[i3+2] += (s.vel[i3+2] + Math.cos(app.t * 0.55 + s.ph[i] * 1.7) * 0.10) * dt;
+    if (s.pos[i3+1] < -TR - 0.4) {
+      s.pos[i3]   = rf(-4.6, 4.6);
+      s.pos[i3+1] = TR + rf(0.4, 2.2);
+      s.pos[i3+2] = rf(-4.6, 4.6);
+    }
+  }
+
+  // 烟花
+  const sp = sparks;
+  const doFW = (app.mode === 5);
+  if (doFW) {
+    sp.next -= dt;
+    if (sp.next <= 0) { emitFirework(app.t); sp.next = rf(0.55, 1.7); }
+  }
+  const damp = Math.pow(0.62, dt);
+  for (let i = 0; i < sp.cap; i++) {
+    if (sp.life[i] <= 0) continue;
+    sp.life[i] -= sp.decay[i] * dt;
+    if (sp.life[i] <= 0) { sp.life[i] = 0; continue; }
+    const i3 = i * 3;
+    sp.vel[i3+1] -= 1.15 * dt;           // 重力
+    sp.vel[i3] *= damp; sp.vel[i3+2] *= damp;
+    sp.pos[i3]   += sp.vel[i3] * dt;
+    sp.pos[i3+1] += sp.vel[i3+1] * dt;
+    sp.pos[i3+2] += sp.vel[i3+2] * dt;
+  }
+}
+
+function fillDynamic() {
+  const d = dynBuf.data;
+  let n = 0;
+  const H2 = TREE_H * 0.5;
+
+  // 雪
+  const s = snow;
+  for (let i = 0; i < s.n; i++) {
+    const o = n * STRIDE;
+    d[o] = s.pos[i*3]; d[o+1] = s.pos[i*3+1]; d[o+2] = s.pos[i*3+2];
+    d[o+3] = 3.6; d[o+4] = 10; d[o+5] = K_SNOW;
+    d[o+6] = s.ph[i]; d[o+7] = 0; d[o+8] = 0;
+    d[o+9] = 0.22 + 0.26 * (0.5 + 0.5 * Math.sin(s.ph[i] * 3.1));
+    n++;
+  }
+
+  // 火花：沿速度反方向补两个点做拖尾，才像"飞散的火星"而不是一簇静止亮点
+  const sp = sparks;
+  const TAIL = sp.TAIL || 1;
+  for (let i = 0; i < sp.cap; i++) {
+    const L = sp.life[i];
+    if (L <= 0) continue;
+    const vx = sp.vel[i*3], vy = sp.vel[i*3+1], vz = sp.vel[i*3+2];
+    const px = sp.pos[i*3], py = sp.pos[i*3+1], pz = sp.pos[i*3+2];
+    for (let k = 0; k < TAIL; k++) {
+      const o = n * STRIDE;
+      const back = k * 0.052;
+      const fade = 1 - k * 0.33;
+      d[o]   = px - vx * back;
+      d[o+1] = py - vy * back;
+      d[o+2] = pz - vz * back;
+      d[o+3] = (3.6 + 5.4 * L) * (0.52 + 0.48 * fade);
+      d[o+4] = sp.slot[i]; d[o+5] = K_SPARK;
+      d[o+6] = sp.ph[i]; d[o+7] = 0; d[o+8] = 0;
+      d[o+9] = L * L * 1.85 * fade * 0.66;
+      n++;
+    }
+  }
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, dynBuf);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, d.subarray(0, n * STRIDE));
+  dynBuf.count = n;
+}
+
+/* 树顶星的位置每帧投影一次，喂给 DOM 那层星芒 */
+function updateStarGlow(vp, distEff) {
+  if (!starGlowEl) return;
+  const yStar = TREE_H + 0.26 - TREE_H * 0.5;      // 世界坐标里的星心
+  const cx = vp[4] * yStar + vp[12];
+  const cy = vp[5] * yStar + vp[13];
+  const cw = vp[7] * yStar + vp[15];
+  if (cw <= 0.02) { starGlowEl.style.opacity = '0'; return; }
+  const W = window.innerWidth, H = window.innerHeight;
+  const sx = (cx / cw * 0.5 + 0.5) * W;
+  const sy = (1 - (cy / cw * 0.5 + 0.5)) * H;
+  // 远近决定大小，入场时随显形一起亮起来
+  const sc = Math.max(0.45, Math.min(1.5, 14.6 / Math.max(1, distEff)));
+  const vis = app.reveal >= 1.05 ? 1 : Math.max(0, (app.reveal - 0.86) / 0.19);
+  starGlowEl.style.transform =
+    'translate3d(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px,0) scale(' + sc.toFixed(3) + ')';
+  starGlowEl.style.opacity = (0.9 * vis).toFixed(3);
+}
+
+function render() {
+  const m = MODES[app.mode];
+  const w = app.w, h = app.h;
+
+  /* -------- 场景 -------- */
+  gl.bindFramebuffer(gl.FRAMEBUFFER, sceneRT.fbo);
+  gl.viewport(0, 0, w, h);
+  gl.clearColor(0, 0, 0, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+
+  const aspect = w / h;
+  const fov = 0.623;                                  // ≈35.7°
+  const proj = m4Perspective(fov, aspect, 0.1, 220);
+
+  // 竖屏（手机）水平视野会变窄，树会撑破左右边界，所以按宽高比把相机拉远
+  const focalPx = h * 1.554;
+  // 竖屏时按宽高比把相机拉远，保证整棵树塞得进画面。
+  // 系数就是"树在屏幕上占多宽"：调太大会留一大片黑边，树显得又小又糊
+  const distMin = focalPx * 6.05 / (w * 0.92);
+  // 入场时相机在更远处，随显形收拢 —— 树"长"出来的同时镜头压近
+  const distEff = Math.min(30, Math.max(app.dist, distMin) * app.bootZoom);
+  const yShift = -0.62 * (distEff / 14.6);
+  const yawNow = app.yaw + app.bootYaw;
+  const cp = Math.cos(app.pitch), sp2 = Math.sin(app.pitch);
+  const cy2 = Math.cos(yawNow), sy2 = Math.sin(yawNow);
+  const view = new Float32Array([
+    cy2,      sp2 * sy2,  -cp * sy2, 0,
+    0,        cp,          sp2,      0,
+    sy2,     -sp2 * cy2,   cp * cy2, 0,
+    0,        yShift,     -distEff,  1
+  ]);
+  const vp = m4Mul(proj, view);
+  updateStarGlow(vp, distEff);
+
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.ONE, gl.ONE);          // 加色混合：密集处自然过曝
+
+  const p = progP;
+  gl.useProgram(p);
+  gl.uniformMatrix4fv(p.u.u_vp, false, vp);
+  gl.uniform1f(p.u.u_focal, focalPx);
+  gl.uniform1f(p.u.u_sizeK, 14.6 / (800 * 1.554));
+  gl.uniform1f(p.u.u_time, app.t);
+  gl.uniform1f(p.u.u_gl, m.gl);
+  gl.uniform1i(p.u.u_mode, app.mode);
+  gl.uniform2f(p.u.u_viewDir, -Math.sin(yawNow), Math.cos(yawNow));
+  gl.uniform3f(p.u.u_waveO, app.waveO[0], app.waveO[1], app.waveO[2]);
+  gl.uniform1f(p.u.u_waveT, app.waveT);
+  gl.uniform1f(p.u.u_shake, app.shake);
+  gl.uniform1f(p.u.u_flash, app.flash * app.flash);
+  gl.uniform1f(p.u.u_reveal, app.reveal);
+  gl.activeTexture(gl.TEXTURE3);
+  gl.bindTexture(gl.TEXTURE_2D, palTex);
+  gl.uniform1i(p.u.u_pal, 3);
+
+  // 静态
+  gl.bindBuffer(gl.ARRAY_BUFFER, staticBuf);
+  bindAttribs(p, STRIDE);
+  gl.drawArrays(gl.POINTS, 0, staticBuf.count);
+
+  // 动态
+  gl.bindBuffer(gl.ARRAY_BUFFER, dynBuf);
+  bindAttribs(p, STRIDE);
+  gl.drawArrays(gl.POINTS, 0, dynBuf.count);
+
+  gl.disable(gl.BLEND);
+
+  /* -------- 泛光 -------- */
+  // 1/4 亮部提取
+  gl.bindFramebuffer(gl.FRAMEBUFFER, b1.fbo);
+  gl.viewport(0, 0, b1.w, b1.h);
+  gl.useProgram(progBright);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, sceneRT.tex);
+  gl.uniform1i(progBright.u.u_tex, 0);
+  gl.uniform2f(progBright.u.u_texel, 1 / w, 1 / h);
+  gl.uniform1f(progBright.u.u_thresh, 0.17);
+  gl.uniform1f(progBright.u.u_power, 0.78);
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+  gl.enableVertexAttribArray(progBright.a.a_p);
+  gl.vertexAttribPointer(progBright.a.a_p, 2, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+  // 横向 → 纵向，两级半径
+  const blur = (src, dst, dx, dy) => {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fbo);
+    gl.viewport(0, 0, dst.w, dst.h);
+    gl.useProgram(progBlur);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, src.tex);
+    gl.uniform1i(progBlur.u.u_tex, 0);
+    gl.uniform2f(progBlur.u.u_dir, dx / dst.w, dy / dst.h);
+    gl.enableVertexAttribArray(progBlur.a.a_p);
+    gl.vertexAttribPointer(progBlur.a.a_p, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  };
+
+  blur(b1, b1tmp, 1.0, 0.0);
+  blur(b1tmp, b1, 0.0, 1.0);
+
+  // 1/8 再降一级，做大范围氛围光
+  gl.bindFramebuffer(gl.FRAMEBUFFER, b2.fbo);
+  gl.viewport(0, 0, b2.w, b2.h);
+  gl.useProgram(progBright);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, b1.tex);
+  gl.uniform1i(progBright.u.u_tex, 0);
+  gl.uniform2f(progBright.u.u_texel, 1 / b1.w, 1 / b1.h);
+  gl.uniform1f(progBright.u.u_thresh, 0.0);
+  gl.uniform1f(progBright.u.u_power, 1.0);
+  gl.enableVertexAttribArray(progBright.a.a_p);
+  gl.vertexAttribPointer(progBright.a.a_p, 2, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+  blur(b2, b2tmp, 1.6, 0.0);
+  blur(b2tmp, b2, 0.0, 1.6);
+
+  // 桌面端再摊一层更大范围的光雾：亮的地方会"溢"到周围空气里。
+  // 手机上省掉这两趟，1/8 分辨率跑两趟已经够用
+  if (!app.isMobile && !app.lite) {
+    blur(b2, b2tmp, 3.6, 0.0);
+    blur(b2tmp, b2, 0.0, 3.6);
+  }
+
+  /* -------- 合成 -------- */
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, w, h);
+  gl.useProgram(progComp);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneRT.tex);
+  gl.uniform1i(progComp.u.u_scene, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, b1.tex);
+  gl.uniform1i(progComp.u.u_b1, 1);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, b2.tex);
+  gl.uniform1i(progComp.u.u_b2, 2);
+  gl.uniform2f(progComp.u.u_res, w, h);
+  gl.uniform1f(progComp.u.u_b1k, 1.26 * m.bloom);
+  gl.uniform1f(progComp.u.u_b2k, 1.10 * m.bloom);
+  gl.uniform1f(progComp.u.u_expo, m.expo * 0.94);
+  gl.enableVertexAttribArray(progComp.a.a_p);
+  gl.vertexAttribPointer(progComp.a.a_p, 2, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+}
+
+/* ---------- 入场序列 ---------- */
+const bootEl   = document.getElementById('boot');
+const btFill   = document.getElementById('btFill');
+const btPct    = document.getElementById('btPct');
+const btLogEl  = document.getElementById('btLog');
+const btBurst1 = document.getElementById('btBurst1');
+const btBurst2 = document.getElementById('btBurst2');
+const btFlash  = document.getElementById('btFlash');
+const btVeil   = document.getElementById('btVeil');
+
+const BT_LINES = [
+  ['CORE IGNITION',        'OK'],
+  ['FIELD LOAD 24,430PT',  'OK'],
+  ['SYNC AURORA.HARMONIC', 'OK'],
+  ['TREE TOPOLOGY LOCKED', 'OK'],
+];
+
+let pctLast = -1;
+
+function paintBoot(k) {
+  if (btFill) btFill.style.transform = 'scaleX(' + k.toFixed(3) + ')';
+  const p = Math.round(k * 100);
+  if (p !== pctLast && btPct) {
+    pctLast = p;
+    btPct.textContent = (p < 10 ? '0' : '') + p + '%';
+  }
+}
+
+function typeBootLog() {
+  if (!btLogEl) return;
+  let i = 0;
+  const nextLine = () => {
+    if (i >= BT_LINES.length) return;
+    const [txt, st] = BT_LINES[i++];
+    const ln = document.createElement('div'); ln.className = 'ln';
+    const a = document.createElement('span'); a.textContent = '>';
+    const b = document.createElement('span'); b.className = 'tx';
+    const c = document.createElement('span'); c.className = 'st'; c.textContent = st;
+    ln.append(a, b, c);
+    btLogEl.appendChild(ln);
+    let j = 0;
+    const tick = () => {
+      b.textContent = txt.slice(0, ++j);
+      if (j < txt.length) setTimeout(tick, 11);
+      else if (i < BT_LINES.length) setTimeout(nextLine, 110);
+    };
+    tick();
+  };
+  setTimeout(nextLine, 250);
+}
+
+function fireBootBurst() {
+  if (btBurst1) btBurst1.classList.add('on');
+  if (btBurst2) btBurst2.classList.add('on');
+  if (btFlash)  btFlash.classList.add('on');
+  app.shake = 0.055;   // 复用摇一摇通道：启动的瞬间整棵树轻轻一颤
+  AU.sfx('boom');
+  AU.say('极光矩阵已唤醒');
+  if (navigator.vibrate) { try { navigator.vibrate([14, 38, 20]); } catch (_) {} }
+}
+
+function endBootCover() {
+  document.body.classList.remove('booting');
+  if (bootEl) {
+    bootEl.classList.add('gone');
+    setTimeout(() => { if (bootEl.parentNode) bootEl.remove(); }, 900);
+  }
+  // 直接摘掉 UI 的遮罩开关。入场已经渲染了两秒，元素有稳定的 0 状态，
+  // 摘掉后 #ui 自身的 .45s 过渡会负责淡入（用 rAF 延后反而可能卡住）
+  ui.classList.remove('boot-hide');
+
+  // 流星在入场结束后才开始出现
+  app.meteorOn = true;
+  app.meteorT = -3.2;          // 出场后三四秒就来第一颗
+
+  // 树露面了，开场的八音盒收尾，歌从这里接上
+  try { AU.cutIntro(); } catch (_) {}
+
+  // 新手势不写出来没人会发现：第一次进来走一遍引导
+  if (!app.guideDone) setTimeout(runGuide, 700);
+  welcomeGift();
+}
+
+/* 这份祝福是从链接里寄来的：说一句，让"礼物"落地。
+   入场走完和跳过入场都要走这一句，否则用 ?boot=0 进来就没有交代。 */
+function welcomeGift() {
+  if (!NAMES_IN_URL) return;
+  setTimeout(() => {
+    if (app.from) toast(app.from + ' 送给你的', 'A GIFT FOR YOU');
+    else if (app.to) toast('这棵树是送给 ' + app.to + ' 的', 'MADE FOR YOU');
+    if (shareBtn) shareBtn.classList.add('glow');
+  }, 2200);
+}
+
+function skipBoot() {
+  document.body.classList.remove('booting');
+  ui.classList.remove('boot-hide');
+  if (bootEl && bootEl.parentNode) bootEl.remove();
+  app.bootOn = false; app.bootK = 1;
+  app.reveal = 1.99; app.bootZoom = 1; app.bootYaw = 0;
+  app.meteorOn = true;
+  try { AU.cutIntro(); } catch (_) {}
+  try { AU.beginIfPending(); } catch (_) {}
+  welcomeGift();
+}
+
+function startBoot() {
+  if (!bootEl) {
+    /* 没有开场遮罩：直接当"入场已过"，起声就是整首歌 */
+    app.bootOn = false; app.bootK = 1;
+    try { AU.beginIfPending(); } catch (_) {}
+    return;
+  }
+  const reduce = window.matchMedia &&
+                 window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  app.bootDur = reduce ? 0.6 : (app.isMobile ? 2.15 : 2.45);
+  app.bootOn = true;
+  app.bootT = 0; app.bootK = 0;
+  app.reveal = -0.16;
+  app.bootZoom = 1.34;
+  app.bootYaw  = -0.46;
+  document.body.classList.add('booting');
+  ui.classList.add('boot-hide');
+  typeBootLog();
+  // 入场开始了：如果声音已经解锁（过了授权门 / App 自动起声），开场那段现在就起
+  try { AU.beginIfPending(); } catch (_) {}
+  // 点一下直接快进到收尾（不用等满两秒）
+  bootEl.addEventListener('pointerdown', () => {
+    if (app.bootOn && !app.bootLock) app.bootT = app.bootDur * 0.66;
+  });
+}
+
+/* ============================================================
+   授权门：进场前的三步互动确认
+   形态照着参考视频那套 HUD 走 —— 大标题 + 宽字距英文 +
+   括号按钮 + 左下步进 + 底部状态；三种确认方式各一步
+   ============================================================ */
+const gateEl   = document.getElementById('gate');
+const gtBody   = document.getElementById('gtBody');
+const gtCn     = document.getElementById('gtCn');
+const gtEn     = document.getElementById('gtEn');
+const gtAct    = document.getElementById('gtAct');
+const gtNoEl   = document.getElementById('gtNo');
+const gtTag    = document.getElementById('gtTag');
+const gtStat   = document.getElementById('gtStat');
+const gtStatEn = document.getElementById('gtStatEn');
+const gtOkEl   = document.getElementById('gtOk');
+const gtSkipEl = document.getElementById('gtSkip');
+
+const GT_STEPS = [
+  {
+    no: '01', tag: 'AUTHORIZATION',
+    cn: '需要访问许可', en: 'ACCESS PERMISSION REQUIRED',
+    stat: '等待用户授权…', statEn: 'AWAITING OPERATOR CONSENT',
+    kind: 'tap', label: '授予访问权限', labelEn: 'GRANT ACCESS',
+    tip: '轻触按钮以授予访问权限', say: '访问许可校验，请确认授权'
+  },
+  {
+    no: '02', tag: 'IDENTITY',
+    cn: '身份资料确认', en: 'IDENTITY VERIFICATION',
+    stat: '正在比对身份特征…', statEn: 'MATCHING OPERATOR RECORD',
+    kind: 'hold', label: '长按核验身份', labelEn: 'HOLD TO VERIFY',
+    tip: '按住 0.9 秒完成核验', say: '身份核验中，请长按按钮'
+  },
+  {
+    no: '03', tag: 'SYNC',
+    cn: '开始读取权限', en: 'PERMISSION READ STARTED',
+    stat: '等待权限同步…', statEn: 'SYNCING PERMISSION TOKEN',
+    kind: 'slide', label: '向右滑动同步', labelEn: 'SLIDE TO SYNC',
+    tip: '拖动滑块到最右端', say: '权限同步中，请向右滑动'
+  }
+];
+
+let gtIdx = 0, gtBusy = false;
+
+function gtBtnHtml(label, labelEn, withBar) {
+  return '<button class="gt-btn" type="button">' +
+           '<span class="bk">[</span><span>' + label + '</span><span class="bk">]</span>' +
+           '<em>' + labelEn + '</em>' + (withBar ? '<i class="pb"></i>' : '') +
+         '</button>';
+}
+
+function gtRender(i, instant) {
+  const st = GT_STEPS[i];
+  const paint = () => {
+    gtCn.textContent = st.cn;
+    gtEn.textContent = st.en;
+    gtStat.textContent = st.stat;
+    gtStatEn.textContent = st.statEn;
+    gtNoEl.textContent = st.no;
+    gtTag.textContent = st.tag;
+    gtAct.innerHTML = '';
+
+    if (st.kind === 'tap') {
+      gtAct.insertAdjacentHTML('beforeend', gtBtnHtml(st.label, st.labelEn, false));
+      const b = gtAct.querySelector('.gt-btn');
+      b.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        if (gtBusy) return;
+        gtPass();
+      });
+    } else if (st.kind === 'hold') {
+      gtAct.insertAdjacentHTML('beforeend', gtBtnHtml(st.label, st.labelEn, true));
+      const b = gtAct.querySelector('.gt-btn');
+      const pb = b.querySelector('.pb');
+      const HOLD = 900;
+      let t0 = 0, raf = 0, done = false;
+      const stop = (ok) => {
+        cancelAnimationFrame(raf);
+        b.classList.remove('held');
+        if (!ok) {
+          pb.style.width = '0%';
+          b.classList.add('bad');
+          setTimeout(() => b.classList.remove('bad'), 360);
+        }
+      };
+      b.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        if (gtBusy || done) return;
+        t0 = performance.now();
+        b.classList.add('held');
+        try { b.setPointerCapture(ev.pointerId); } catch (_) {}
+        const tick = () => {
+          const p = Math.min(1, (performance.now() - t0) / HOLD);
+          pb.style.width = (p * 100).toFixed(1) + '%';
+          if (p >= 1) {
+            done = true; gtPass();
+            return;
+          }
+          raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+      });
+      const release = () => { if (!done) stop(false); };
+      b.addEventListener('pointerup', release);
+      b.addEventListener('pointercancel', release);
+      window.addEventListener('pointerup', release);
+    } else {
+      gtAct.insertAdjacentHTML('beforeend',
+        '<div class="gt-slide" id="gtSlide">' +
+          '<div class="fl"></div><div class="lb">' + st.label + '</div>' +
+          '<div class="kb">→</div>' +
+        '</div>');
+      const track = gtAct.querySelector('#gtSlide');
+      const fl = track.querySelector('.fl');
+      const kb = track.querySelector('.kb');
+      const lb = track.querySelector('.lb');
+      let on = false, sx = 0, x = 0, max = 0;
+
+      const setX = (v) => {
+        max = track.clientWidth - 48;
+        x = Math.max(0, Math.min(max, v));
+        kb.style.left = (4 + x) + 'px';
+        fl.style.width = (52 + x) + 'px';
+        lb.style.opacity = String(1 - x / Math.max(1, max) * 1.15);
+      };
+      track.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        if (gtBusy) return;
+        on = true; sx = ev.clientX - x;
+        kb.style.transition = 'none'; fl.style.transition = 'none';
+        try { track.setPointerCapture(ev.pointerId); } catch (_) {}
+      });
+      track.addEventListener('pointermove', (ev) => {
+        if (!on) return;
+        setX(ev.clientX - sx);
+        if (x >= max * 0.9) {
+          on = false;
+          gtPass();
+        }
+      });
+      const off = () => {
+        if (!on) return;
+        on = false;
+        kb.style.transition = 'left .3s cubic-bezier(.2,.8,.3,1)';
+        fl.style.transition = 'width .3s cubic-bezier(.2,.8,.3,1)';
+        setX(0);
+      };
+      track.addEventListener('pointerup', off);
+      track.addEventListener('pointercancel', off);
+      setTimeout(() => setX(0), 0);
+    }
+    gtAct.insertAdjacentHTML('beforeend',
+      '<div class="gt-tip">' + st.tip + '</div>');
+
+    // 三步进度条：填在提示下面，顺带把中间的空场压一压
+    let dots = '';
+    for (let k = 0; k < GT_STEPS.length; k++) {
+      dots += '<i class="' + (k < i ? 'done' : (k === i ? 'on' : '')) + '"></i>';
+    }
+    gtAct.insertAdjacentHTML('beforeend', '<div class="gt-dots">' + dots + '</div>');
+
+    if (!instant) {
+      gtBody.classList.remove('out');
+      if (st.say) setTimeout(() => AU.say(st.say), 260);
+    }
+  };
+
+  if (instant) { paint(); return; }
+  gtBody.classList.add('out');
+  setTimeout(paint, 210);
+}
+
+/* 一步确认通过 → 闪光扫过 → 进入下一步（或收尾） */
+function gtPass() {
+  if (gtBusy) return;
+  gtBusy = true;
+  gtOkEl.classList.remove('on');
+  void gtOkEl.offsetWidth;
+  gtOkEl.classList.add('on');
+  AU.sfx('ok');
+  if (navigator.vibrate) { try { navigator.vibrate([12, 22, 14]); } catch (_) {} }
+
+  const last = gtIdx >= GT_STEPS.length - 1;
+  setTimeout(() => {
+    gtBusy = false;
+    if (last) gtFinish();
+    else { gtIdx++; gtRender(gtIdx, false); }
+  }, last ? 320 : 460);
+}
+
+/* 三步都过：亮出"核验通过"，随后交棒给树的生长序列 */
+function gtFinish() {
+  gtBusy = true;
+  gtBody.classList.add('out');
+  setTimeout(() => {
+    gtCn.textContent = '核验通过';
+    gtEn.textContent = 'READ COMPLETE · VERIFIED';
+    gtAct.innerHTML = '<div class="gt-tip">权限已授予，正在渲染场景…</div>' +
+                      '<div class="gt-dots"><i class="done"></i><i class="done"></i><i class="done"></i></div>';
+    gtNoEl.textContent = '03';
+    gtTag.textContent = 'VERIFY';
+    gtStat.textContent = '读取完毕，核验通过，权限已授予';
+    gtStatEn.textContent = 'PERMISSION GRANTED';
+    gtBody.classList.remove('out');
+    gtCn.style.color = '#eafff8';
+    AU.say('权限已授予，正在唤醒极光矩阵', { beep: true });
+    if (navigator.vibrate) { try { navigator.vibrate([10, 30, 10, 30, 24]); } catch (_) {} }
+  }, 210);
+
+  setTimeout(() => {
+    hideGate();
+    startBoot();
+    applyBootDebug();
+  }, 880);
+}
+
+function showGate(startIdx) {
+  if (!gateEl) return;
+  gtIdx = Math.max(0, Math.min(GT_STEPS.length - 1, startIdx || 0));
+  gateEl.classList.add('on');
+  window.__gateOpen = true;
+  document.body.classList.add('booting');
+  ui.classList.add('boot-hide');
+  gtRender(gtIdx, true);
+  if (startIdx > 0) {   // 调试：直接跳到某一步时，前面几步算已通过
+    gtNoEl.textContent = GT_STEPS[gtIdx].no;
+  }
+  const gtMuteEl = document.getElementById('gtMute');
+  if (gtMuteEl) {
+    gtMuteEl.textContent = AU.on ? '声音 ON' : '声音 OFF';
+    gtMuteEl.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const on = AU.toggle();
+      gtMuteEl.textContent = on ? '声音 ON' : '声音 OFF';
+    });
+  }
+  gtSkipEl.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    hideGate();
+    startBoot();
+    applyBootDebug();
+  });
+  setTimeout(() => { if (gtSkipEl) gtSkipEl.style.opacity = '.8'; }, 1800);
+}
+
+function hideGate() {
+  if (!gateEl || !gateEl.classList.contains('on')) return;
+  window.__gateOpen = false;
+  gateEl.classList.add('gone');
+  setTimeout(() => {
+    gateEl.classList.remove('on', 'gone');
+  }, 520);
+}
+
+function applyBootDebug() {
+  const qs = new URLSearchParams(location.search);
+  // ?bootdur=0.8 改成更短的入场（也用来在无头环境把序列一把跑完做验收）
+  const bd = parseFloat(qs.get('bootdur') || '');
+  if (bd > 0) app.bootDur = bd;
+  if (qs.has('bootat')) {
+    const bt = Math.max(0, parseFloat(qs.get('bootat') || '0'));
+    app.bootT = bt; app.bootLock = true;
+    const kk = Math.min(1, bt / app.bootDur);
+    app.bootK = kk;
+    const xx = Math.max(0, Math.min(1, (kk - 0.10) / 0.84));
+    const ee = xx * xx * (3 - 2 * xx);
+    app.reveal   = -0.16 + 1.38 * ee;
+    app.bootZoom = 1 + 0.34 * (1 - ee);
+    app.bootYaw  = -0.46 * (1 - ee) * (1 - ee);
+    paintBoot(kk);
+    // 定格看树时把遮罩整个撤掉（opacity 有过渡，靠它来不及）；
+    // 加 &cover=1 则保留 HUD、只撤暗场，用来验收"界面浮在树上"的叠加观感
+    if (bootEl) {
+      bootEl.style.transition = 'none';
+      if (qs.get('cover') === '1') { if (btVeil) btVeil.style.display = 'none'; }
+      else bootEl.style.display = 'none';
+    }
+  }
+}
+
+/* ---------- 主循环 ---------- */
+let last = performance.now();
+let fpsAcc = 0, fpsN = 0, warmup = 0, degradeTries = 0;
+
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+
+  if (!document.hidden) {
+    update(dt);
+    fillDynamic();
+    render();
+
+    // 自适应画质：宁可轻微掉帧，也不拿清晰度去换。
+    // 阈值放到 32fps、只降一次、最多让到 0.88 —— 再往下屏幕就开始发虚了
+    warmup += dt;
+    fpsAcc += dt; fpsN++;
+    if (warmup > 3.0 && fpsAcc >= 2.5) {
+      const fps = fpsN / fpsAcc;
+      fpsAcc = 0; fpsN = 0;
+      if (fps < 32 && degradeTries < 1) {
+        degradeTries++;
+        app.pxScale = 0.88;
+        app.w = 0; app.h = 0;      // 强制 resize 重新分配渲染目标
+        resize();
+      }
+      // 再掉下去就进省电模式：不动分辨率，只少画几笔
+      if (fps < 26) app.lite = true;
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- 启动 ---------- */
+function boot() {
+  // 手机/平板：靠减少粒子来保帧率，渲染分辨率贴近屏幕物理像素（清晰优先）
+  const uaMobile = /Android|iPhone|iPod|iPad|Mobile|HarmonyOS/i.test(navigator.userAgent);
+  const touchFirst = navigator.maxTouchPoints > 1 &&
+                     Math.min(screen.width, screen.height) <= 900;
+  app.isMobile = uaMobile || touchFirst;
+  app.quality  = app.isMobile ? 0.46 : 1;
+  // 像素预算要贴着屏幕物理像素走：画布一旦低于屏幕分辨率，
+  // 浏览器就会把画布拉伸上去，插值会让整屏发虚 —— 粒子再怎么调也是糊的。
+  // 手机要清晰，只能靠减粒子省性能，不能靠降分辨率。
+  app.pxBudget = app.isMobile ? 2.60e6 : 4.20e6;
+  if (app.isMobile) document.body.classList.add('mobile');
+
+  resize();
+  buildAll();
+
+  // 支持 ?mode=3&hud=0&t=4 直接进入指定模式（便于分享和截图）
+  const qs = new URLSearchParams(location.search);
+  const m0 = parseInt(qs.get('mode') || '0', 10);
+  if (m0 > 0 && m0 < MODES.length) {
+    setMode(m0, true);
+  } else if (!qs.has('mode')) {
+    // 没有显式指定就延续上次看的那一档
+    try {
+      const lastMode = parseInt(localStorage.getItem('aurora.mode') || '0', 10);
+      if (lastMode > 0 && lastMode < MODES.length) setMode(lastMode, true);
+    } catch (_) {}
+  }
+  try { app.guideDone = localStorage.getItem('aurora.guide') === '1'; } catch (_) {}
+  if (qs.get('hud') === '0') { app.hud = false; ui.classList.add('hide'); }
+  // ?dist=18 指定机位距离（出图、分享卡用）
+  const dq = parseFloat(qs.get('dist') || '');
+  if (dq > 6 && dq < 40) { app.dist = dq; app.distT = dq; }
+  const t0 = parseFloat(qs.get('t') || '0');
+  if (t0 > 0) { app.t = t0; }   // 预热时间轴，让动画处在想要的相位
+  // ?fw=2 预放几发烟花（分享链接时能立刻看到）
+  const fwN = Math.min(6, parseInt(qs.get('fw') || '0', 10));
+  for (let i = 0; i < fwN; i++) emitFirework(app.t, 0.10 + i * 0.26);
+
+  // ?wave=0.35 在树心预演一次冲击波（把波停在指定时刻，方便截图验证）
+  if (qs.has('wave')) {
+    app.waveO = [0, -0.45, 0.55];
+    app.waveT = Math.max(0, parseFloat(qs.get('wave') || '0.35'));
+    app.waveLock = true;
+  }
+  // ?shake=0.4 预置一次摇晃
+  if (qs.has('shake')) {
+    app.shake = Math.max(0, parseFloat(qs.get('shake') || '0.4'));
+    app.shakeLock = true;
+  }
+  // ?flash=1 把"双击点亮"定格在满幅（截图验证用）
+  if (qs.has('flash')) {
+    app.flash = Math.max(0, Math.min(1, parseFloat(qs.get('flash') || '2.6')));
+    app.flashLock = true;
+  }
+  // ?toast=1 把提示条定格显示（截图验证用，CSS 过渡在无头环境下不推进）
+  if (qs.has('toast')) {
+    setTimeout(() => {
+      toast('全树点亮', 'ILLUMINATION');
+      if (toastEl) {
+        toastEl.style.transition = 'none';
+        toastEl.style.opacity = '1';
+        toastEl.style.transform = 'translate(-50%, 0)';
+      }
+    }, 260);
+  }
+
+  // ?qr=1 直接弹二维码浮层（截图验收用）
+  if (qs.has('qr')) {
+    setTimeout(() => {
+      showQR();
+      if (qrBoxEl) qrBoxEl.style.transition = 'none';
+    }, 300);
+  }
+  // ?meteor=1 放一颗流星并把它按在飞行中段（截图验收用）
+  if (qs.has('meteor')) {
+    setTimeout(() => {
+      spawnMeteor();
+      const m = meteorLayer && meteorLayer.lastElementChild;
+      if (m) {
+        m.style.animationPlayState = 'paused';
+        m.style.animationDelay = '-0.95s';
+      }
+    }, 400);
+  }
+
+  // ?guide=1 强制走一遍首次引导；?name=1 直接打开署名框；?wish=3 预置愿望星（截图验收用）
+  if (qs.get('guide') === '1') setTimeout(runGuide, 600);
+  if (qs.get('name') === '1') setTimeout(openNameBox, 600);
+  const wq = parseInt(qs.get('wish') || '0', 10);
+  if (wq > 0) {
+    app.wishes = Math.min(WISH_MAX, wq);
+    if (wishBarEl) wishBarEl.hidden = false;
+    if (wishNumEl) wishNumEl.textContent = app.wishes;
+  }
+
+  // ?sim=tap|swipe|vswipe|dbl|tri|long 用合成指针事件跑一遍手势，验证识别逻辑（不依赖真机）
+  // 注：pointerType 用 'pen'。手指走的是 touch 通道，pointer 通道会主动忽略 touch，
+  //     所以这里模拟"触控笔"，两类通道各测各的互不干扰。
+  const sim = qs.get('sim');
+  if (sim) {
+    setTimeout(() => {
+      const r = canvas.getBoundingClientRect();
+      const cx = r.width * 0.5, cy = r.height * 0.58;
+      const ev = (type, x, y) => canvas.dispatchEvent(new PointerEvent(type, {
+        pointerId: 1, pointerType: 'pen', bubbles: true, isPrimary: true,
+        clientX: r.left + x, clientY: r.top + y
+      }));
+      ev('pointerdown', cx, cy);
+      if (sim === 'swipe') {
+        for (let i = 1; i <= 6; i++) ev('pointermove', cx - i * 24, cy);
+        ev('pointerup', cx - 144, cy);
+      } else if (sim === 'vswipe') {
+        for (let i = 1; i <= 6; i++) ev('pointermove', cx, cy - i * 24);
+        ev('pointerup', cx, cy - 144);
+      } else if (sim === 'dbl') {
+        ev('pointerup', cx, cy);
+        setTimeout(() => { ev('pointerdown', cx, cy); ev('pointerup', cx, cy); }, 120);
+      } else if (sim === 'tri') {
+        canvas.dispatchEvent(new PointerEvent('pointerdown', {
+          pointerId: 1, pointerType: 'pen', bubbles: true, isPrimary: true,
+          clientX: r.left + cx, clientY: r.top + cy
+        }));
+        canvas.dispatchEvent(new PointerEvent('pointerdown', {
+          pointerId: 2, pointerType: 'pen', bubbles: true, isPrimary: false,
+          clientX: r.left + cx + 60, clientY: r.top + cy
+        }));
+        canvas.dispatchEvent(new PointerEvent('pointerdown', {
+          pointerId: 3, pointerType: 'pen', bubbles: true, isPrimary: false,
+          clientX: r.left + cx - 60, clientY: r.top + cy + 40
+        }));
+        setTimeout(() => {
+          for (const id of [1, 2, 3]) canvas.dispatchEvent(new PointerEvent('pointerup', {
+            pointerId: id, pointerType: 'pen', bubbles: true,
+            clientX: r.left + cx, clientY: r.top + cy
+          }));
+        }, 120);
+      } else if (sim === 'long') {
+        setTimeout(() => ev('pointerup', cx, cy), 560);
+      } else {
+        setTimeout(() => ev('pointerup', cx, cy), 90);
+      }
+    }, 900);
+  }
+
+  // 入场序列：?boot=0 直接跳过；?gate=1/0 强制开/关授权门；?gatestep=2 停在某一步验收
+  // ?bootat=1.2 定格在入场第 1.2 秒（截图验证用）
+  const reduceMotion = window.matchMedia &&
+                       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const gateQ = qs.get('gate');
+  const wantGate = !qs.has('bootat') &&
+                   (gateQ === '1' || (gateQ !== '0' && app.isMobile && !reduceMotion));
+  if (qs.get('boot') === '0') {
+    skipBoot();
+    if (gateEl && gateEl.parentNode) gateEl.parentNode.removeChild(gateEl);
+  } else if (wantGate) {
+    showGate(parseInt(qs.get('gatestep') || '0', 10));
+  } else {
+    startBoot();
+    applyBootDebug();
+  }
+
+  window.addEventListener('resize', () => { resize(); });
+  requestAnimationFrame(frame);
+  document.body.dataset.ready = '1';
+  if (qs.get('dbg') === '1') {
+    const put = () => {
+      document.title = 'P=' + staticBuf.count + ' D=' + dynBuf.capN +
+                       ' FLT=' + floatTarget + ' GL2=' + isGL2 +
+                       ' RES=' + app.w + 'x' + app.h + ' DPR=' + app.dpr +
+                       ' WV=' + app.waveT.toFixed(2) + ' SH=' + app.shake.toFixed(2) +
+                       ' WA=' + (progP.u.u_waveT ? 'y' : 'n') +
+                       ' TAP=' + app.taps + ' FW=' + app.fwCount + ' MODE=' + app.mode +
+                       ' DS=' + app.distT.toFixed(2) + ' YA=' + app.yaw.toFixed(2) +
+                       ' FL=' + app.flash.toFixed(2) +
+                       ' AU=' + (AU.ready ? '1' : '0') + (AU.on ? '1' : '0') +
+                       ' RV=' + app.reveal.toFixed(2) + ' BK=' + app.bootK.toFixed(2) +
+                       ' RA=' + (progP.u.u_reveal ? 'y' : 'n');
+    };
+    setTimeout(put, 1200);
+    setInterval(put, 300);
+  }
+}
+
+try {
+  boot();
+} catch (e) {
+  fail('初始化失败：' + (e && e.message ? e.message : e));
+}
+
+// 暴露给外部调试 / 自动化截图
+/* 版本戳：线上出问题时，控制台一眼能看出跑的是哪版 */
+try {
+  console.log('%c AURORA-7 ' + AURORA_VERSION + ' ',
+    'background:#6fe3b8;color:#04120e;padding:2px 7px;border-radius:2px;font-weight:700');
+  document.body.dataset.build = AURORA_VERSION;
+} catch (_) {}
+
+window.__aurora = {
+  app, setMode, MODES, render, update, fillDynamic, resize,
+  showGate, hideGate, gtPass, illuminate, resetView, toast, AU,
+  spawnMeteor, collectWish, triggerAurora, runGuide, stopGuide,
+  applyNames, shareUrl, doShare, showQR, hideQR, copyLink, QR,
+  gateStep: (i) => { gtIdx = i; gtRender(i, true); }
+};
+
+})();
+</script>
+</body>
+</html>
